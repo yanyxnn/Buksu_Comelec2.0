@@ -37,3 +37,9 @@ test('correct password must be provided to update password', function () {
 
     $response->assertHasErrors(['current_password']);
 });
+
+test('password settings page is displayed', function () {
+    $this->actingAs(User::factory()->create());
+
+    $this->get('/settings/password')->assertOk();
+});
