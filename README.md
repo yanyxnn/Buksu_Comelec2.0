@@ -1,208 +1,230 @@
 # BUKSU COMELEC 2.0
 
-> A secure, reusable, configurable, and scalable election platform for Bukidnon State University.
+## System Architecture and Platform Overview
 
-BUKSU COMELEC 2.0 is being designed as a **long-term election platform**, not a one-time voting website. The system is intended to support small college/department elections as well as large university-wide elections using the same core election engine.
+BUKSU COMELEC 2.0 is a secure, reusable, configurable, and scalable election management platform for Bukidnon State University.
 
-The first production target is the **November 2026 election**, but the architecture is intentionally election-agnostic so future elections can be configured without rewriting the application.
+The system is designed to support elections of different sizes and structures using one common election engine. It is intended for long-term institutional use rather than a single election cycle.
 
----
-
-## Project Status
-
-**Current phase:** Foundation / Architecture
-
-The Laravel application has been initialized with Blade, Livewire, and MySQL.
-
-The election engine, voting database model, integrity safeguards, live-results infrastructure, backup/recovery subsystem, and other production features are being implemented incrementally according to the approved architecture and documentation.
-
-> **Important:** Do not treat a working UI or partially implemented feature as proof that the election system is production-ready. Every major subsystem must pass its required tests and integrity checks before the project advances.
+The first production target is the November 2026 election, while the underlying architecture is designed to support future university-wide, college, department, year-level, sectoral, special, and custom elections.
 
 ---
 
-## Core Technology
+# 1. System Purpose
+
+The primary purpose of BUKSU COMELEC 2.0 is to provide an election platform that is:
+
+- Secure
+- Auditable
+- Scalable
+- Configurable
+- Reliable
+- Recoverable
+- Reusable
+- Protective of ballot secrecy
+- Resistant to duplicate, partial, corrupted, or altered votes
+
+The system is designed around the principle:
+
+> **Prevent → Validate → Commit → Protect → Detect → Reconcile → Recover → Preserve**
+
+---
+
+# 2. High-Level Architecture
+
+The platform is organized into interconnected domains:
+
+```text
+                    BUKSU COMELEC 2.0
+                           │
+        ┌──────────────────┼──────────────────┐
+        │                  │                  │
+     Identity          Election Engine      Security
+        │                  │                  │
+        ▼                  ▼                  ▼
+    Students          Configuration       Authorization
+    Enrollment        Contests            Audit
+    Admins            Eligibility         Incidents
+                      Candidates
+                      Ballots
+        │                  │                  │
+        └──────────────────┼──────────────────┘
+                           │
+                           ▼
+                     Voting Engine
+                           │
+             ┌─────────────┼─────────────┐
+             ▼             ▼             ▼
+        Participation    Ballots       Integrity
+             │             │             │
+             └─────────────┼─────────────┘
+                           ▼
+                    Results Engine
+                           │
+             ┌─────────────┴─────────────┐
+             ▼                           ▼
+      Reconciliation                Live Results
+                                           │
+                                           ▼
+                                   Realtime Delivery
+                                           │
+                                     Many Clients
+
+Supporting Systems:
+- Data Center Import
+- Audit and Incident Management
+- Backup and Disaster Recovery
+- Historical Election Archive
+- Notifications
+- Reporting
+- System Health Monitoring
+```
+
+---
+
+# 3. Technology Architecture
+
+The planned technology stack is:
 
 - **Backend:** Laravel
-- **Frontend framework:** Blade + Livewire
+- **Application interface:** Blade + Livewire
 - **Styling:** Tailwind CSS
 - **Database:** MySQL
-- **Authentication:** Google OAuth / Laravel Socialite
-- **Realtime:** Laravel Reverb + WebSockets
+- **Authentication:** Google OAuth
+- **Realtime:** Laravel Reverb / WebSockets
 - **Realtime coordination:** Redis / pub-sub where required
-- **Queues:** Laravel Queue
-- **Testing:** Laravel/PHP testing stack
-- **Version control:** Git
+- **Background processing:** Laravel Queues
+- **Testing:** Laravel/Pest testing stack
 
-The exact package versions and environment requirements are defined by the project's actual Composer and package configuration.
-
----
-
-# Project Goals
-
-BUKSU COMELEC 2.0 must provide:
-
-- A reusable election engine
-- Fully configurable election rules
-- Secure student authentication
-- Current student data based on official Data Center uploads
-- Configurable eligibility rules
-- Controlled candidate management
-- Secret-ballot protection
-- Atomic and idempotent vote submission
-- Protection against duplicate/ghost votes
-- Immutable cast ballots
-- Reliable result calculation and reconciliation
-- Anonymous live candidate leaderboards
-- Overall live cast-vote count
-- Scalable realtime delivery
-- Comprehensive audit and incident tracking
-- Automatic and downloadable backups
-- Disaster recovery and restore testing
-- Historical election archives
-- Immutable finalized elections
-- Small-to-large election scalability
+The exact package versions and infrastructure configuration are environment-dependent, but the domain architecture remains independent of specific frontend presentation.
 
 ---
 
-# Architectural Principles
+# 4. Core Architectural Principles
 
-## 1. MySQL is the authoritative election source
+## 4.1 MySQL is the authoritative election data source
 
 MySQL is the source of truth for:
 
-- election state
+- student identity and current official academic data
+- election configuration
 - eligibility snapshots
-- participation
+- candidate/candidacy data
+- voter participation
 - cast ballots
 - ballot selections
-- results data
-- audit/incident records
+- result calculations
+- reconciliation
+- audit records
+- election incidents
 
-Realtime services, caches, queues, and displayed counters are secondary systems.
+Realtime channels, caches, displayed counters, queues, and reports are secondary systems.
 
 ---
 
-## 2. A vote only exists after a successful database commit
+## 4.2 A vote exists only after successful database commit
 
-A click, API request, websocket event, or displayed counter does not create a vote.
+A vote is considered valid only after the complete voting transaction is successfully committed.
+
+The system must not consider the following to be proof of a vote:
+
+- button click
+- browser state
+- request reception
+- websocket event
+- queue job creation
+- live counter increment
 
 The authoritative sequence is:
 
 ```text
 Validate
-  ↓
-Atomic database transaction
-  ↓
-Commit successfully
-  ↓
-Vote exists
+   ↓
+Atomic Transaction
+   ↓
+Database Commit
+   ↓
+Vote Exists
 ```
 
-A failed transaction must not leave a partial vote.
+A failed transaction must not leave a partial participation record, partial ballot, or partial ballot selection set.
 
 ---
 
-## 3. Participation and ballot selections are separated
+## 4.3 Participation and ballot selections are separate
 
 The system separates:
 
 ```text
 Voter Participation
-      +
+       +
 Cast Ballot
-      +
+       +
 Ballot Selections
 ```
 
-A normal application lookup must not provide a simple student-to-candidate-selection relationship.
+Participation records answer:
 
-This separation supports ballot secrecy while still allowing technical investigation of submission and participation status.
+> Did this student participate in the election?
 
----
+Ballot records answer:
 
-## 4. Cast ballots are immutable
+> What ballot was cast?
 
-There is no normal administrator function to:
+Ballot selections answer:
 
-- edit a vote
-- replace a candidate selection
-- delete a cast ballot
-- reset a student's vote
+> What was selected on that ballot?
 
-When something goes wrong, the system creates an integrity incident and preserves the original evidence.
+The normal application must not provide a routine lookup that directly associates a student with candidate selections.
 
 ---
 
-## 5. Result counters are not the source of truth
+## 4.4 Cast ballots are immutable
 
-Results are derived from authoritative committed ballots:
+Once a ballot is cast, it cannot be edited through normal administrative functionality.
 
-```text
-Committed Ballots
-      ↓
-Ballot Selections
-      ↓
-Result Calculation
-      ↓
-Aggregates
-      ↓
-Live Display
-```
+There is no normal:
 
-If an aggregate becomes inconsistent, it must be recalculated from authoritative ballot data.
+- Edit Vote
+- Delete Vote
+- Change Candidate Selection
+- Reset Vote
+- Replace Ballot
+
+function.
+
+When a technical problem occurs, the original record and evidence are preserved and an election incident is created.
 
 ---
 
-## 6. Realtime is delivery only
+# 5. Election Engine
 
-Student-facing realtime results are limited to:
+BUKSU COMELEC 2.0 is a configurable election engine rather than a collection of election-specific code paths.
 
-1. Overall successfully cast votes
-2. Anonymous candidate leaderboards
+The engine supports:
 
-The realtime channel must never expose:
-
-- voter identity
-- student ID
-- institutional email
-- ballot ID
-- submission UUID
-- receipt reference
-- individual vote selections
-- student-to-candidate relationships
-
-If realtime fails, voting data remains safe and clients can recover the current authoritative state.
-
----
-
-# Election Engine
-
-The application is an **election engine**, not a November-specific application.
-
-Election rules that may change between elections must be configuration-driven rather than hard-coded.
-
-Examples include:
-
-- contests/positions
-- election scope
-- voter eligibility
-- candidate eligibility
-- candidate pools
-- number of seats
-- minimum/maximum selections
+- multiple elections
+- reusable templates/presets
+- custom election configuration
+- configurable contests
+- configurable scopes
+- configurable eligibility
+- configurable candidate pools
+- configurable seat counts
+- configurable selection limits
 - abstention
 - representation groups
 - schedules
-- result/tally methods
-- reporting dimensions
+- result/tally rules
+- reporting configuration
 
-Templates/presets are starting configurations only. Each actual election becomes its own normalized and versioned configuration.
+Rules that may reasonably differ between elections must be represented as election configuration rather than hard-coded logic.
 
 ---
 
-# Election Lifecycle
+# 6. Election Lifecycle
 
-The planned lifecycle is:
+The planned election lifecycle is:
 
 ```text
 DRAFT
@@ -236,22 +258,38 @@ FINALIZED
 HISTORICAL / ARCHIVED
 ```
 
-Key rules:
+Important lifecycle rules:
 
-- Election opening and closing use backend/server time.
+- Backend/server time is authoritative.
+- The browser countdown is display-only.
 - Emergency pause is immediate.
 - A paused election rejects new vote submissions.
-- Already committed votes remain valid.
-- Locked election configuration cannot be casually changed.
-- Finalized elections are immutable.
+- Previously committed votes remain valid.
+- Ballot-critical configuration is locked before voting.
+- Finalized elections are immutable historical records.
 
 ---
 
-# Student Data Rules
+# 7. Election Configuration and Snapshots
 
-## Permanent identity
+Before an election becomes active, the system produces and locks approved snapshots, including:
 
-The student's **Institutional/Student ID** is the permanent student identity.
+- election configuration snapshot
+- eligibility snapshot
+- candidate roster snapshot
+- ballot structure snapshot
+
+The running election uses these approved snapshots.
+
+Changes to current student records or future election configurations must not silently alter an election that is already locked or running.
+
+---
+
+# 8. Student Identity and Academic Data
+
+## 8.1 Permanent identity
+
+The Institutional/Student ID is the permanent student identity.
 
 Institutional email is protected from ordinary manual editing.
 
@@ -262,110 +300,326 @@ ACTIVE
 INACTIVE
 ```
 
-## Current academic placement
+No separate `IRREGULAR` student status is stored in the system.
 
-The latest official Data Center upload determines current academic placement such as:
+## 8.2 Current academic placement
+
+The latest official Data Center data determines current academic placement, including:
 
 - college
 - course/program
 - year level
 - current status
 
-The application does not independently calculate academic standing from individual subjects.
+The election platform does not independently calculate academic standing from individual subjects.
 
-## Course-change rule
+## 8.3 Course-change rule
 
-When a student changes course/program, the student's year level in the new course becomes:
+When a student changes course/program:
 
 ```text
-1st Year
+New course = current course
+Year level in new course = 1st Year
 ```
 
-regardless of the previous course/year level.
+This applies regardless of the previous course or year level.
 
-A student may still be academically treated as irregular by the university, but **Irregular is not a student status in this system**.
-
-## Missing students
+## 8.4 Missing student records
 
 A student missing from a later Data Center roster is not automatically assumed to be graduated.
 
-Legitimate election-specific cases, such as late COR validation, may be handled through a controlled election eligibility exception process without falsifying the official Data Center record.
+Legitimate election-specific cases may be handled through a controlled eligibility exception process while preserving the official Data Center source record.
 
 ---
 
-# Candidate Management
+# 9. Data Center Import Architecture
+
+The normal import process is:
+
+```text
+Upload
+  ↓
+Staging
+  ↓
+Validation
+  ↓
+Preview
+  ↓
+Review
+  ↓
+Import Confirmation
+  ↓
+Chunked Processing
+  ↓
+Import Summary
+```
+
+The import system should:
+
+- prevent duplicate institutional identities
+- identify new students
+- identify changed students
+- detect college/course/year changes
+- identify invalid records
+- record import batches
+- preserve import history
+
+The latest official Data Center upload becomes the current official academic record.
+
+---
+
+# 10. Eligibility Engine
+
+Eligibility is configuration-driven.
+
+The architecture supports eligibility sources such as:
+
+- all eligible students
+- rule-based eligibility
+- selected students
+- uploaded voter lists
+- custom rules
+- college
+- program/course
+- year level
+- sector
+- enrollment status
+- student status
+- specific institutional IDs
+
+Election eligibility is resolved into a locked election-specific snapshot.
+
+Once the election is running, changes to current student data do not silently change the locked eligibility snapshot.
+
+The system also supports controlled election-specific eligibility exceptions for legitimate cases.
+
+---
+
+# 11. Candidate Architecture
 
 Candidates are students and do not have separate candidate accounts.
 
-The system separates:
+The model is:
 
 ```text
-Person / Student Identity
-        ↓
-Election-specific Candidacy
+Student Identity
+      +
+Election-Specific Candidacy
 ```
 
-Candidate management supports:
+The candidate subsystem supports:
 
-- eligibility validation
+- candidate eligibility
 - contest assignment
 - party affiliation
-- official profile/photo data
-- approval
-- candidate roster creation
+- candidate profile information
+- candidate photo
+- candidate conflicts
+- candidate approval
+- candidate roster
 - candidate roster snapshot
-- roster locking
-- conflict validation
+- candidate roster locking
 
-Candidate rosters are reviewed and approved before locking.
+Candidate information used by a live election must be approved and locked before voting.
 
-Candidates use the normal student login and voting flow.
+Candidates participate in voting through normal student authentication.
 
 ---
 
-# Vote Integrity
+# 12. Voting Architecture
 
-Vote integrity is one of the highest-priority architectural concerns.
+The voting system is designed around transactional integrity.
 
-The system is specifically designed to prevent:
+A final submission must perform:
+
+```text
+Validate Election State
+        ↓
+Validate Eligibility
+        ↓
+Validate Ballot Structure
+        ↓
+Validate Submission Idempotency
+        ↓
+Create Participation
+        ↓
+Create Cast Ballot
+        ↓
+Create Ballot Items
+        ↓
+Create Participation Receipt
+        ↓
+COMMIT
+```
+
+All authoritative vote records must succeed or fail together.
+
+## Idempotency
+
+Each final submission uses an idempotent submission identifier so that:
+
+- double-clicks
+- repeated requests
+- network retries
+- mobile connection problems
+- browser retries
+
+do not create duplicate votes.
+
+If the result of a submission is uncertain because of a network failure, the system must determine the submission status before allowing a retry.
+
+---
+
+# 13. Abstention
+
+The system supports two distinct concepts:
+
+## Election-level abstention
+
+A student may deliberately abstain from the entire election.
+
+## Contest-level abstention
+
+A student may abstain from an individual contest.
+
+For contest-level abstention:
+
+- Abstain is mutually exclusive with candidate selections.
+- An abstention does not affect later contests.
+- Abstention is counted separately from candidate selections.
+
+Participation and abstention reporting must clearly distinguish:
+
+- eligible voters
+- participating voters
+- non-participants
+- complete abstentions
+- contest abstentions
+- candidate selections
+
+---
+
+# 14. Vote Integrity Architecture
+
+Vote integrity is a core system concern.
+
+The system must prevent or detect:
 
 - ghost votes
 - duplicate votes
 - phantom live counts
 - partial submissions
-- incorrect result aggregates
-- accidental vote alteration
-- duplicate retry submissions
-- race-condition vote creation
+- incorrect aggregates
+- race-condition submissions
+- inconsistent participation/ballot states
+- invalid ballot contents
 
-Core mechanisms include:
+Core protections include:
 
 - database unique constraints
+- foreign keys
 - atomic transactions
-- idempotent submission UUIDs
+- idempotency
 - concurrency protection
 - immutable ballots
-- post-commit realtime events
+- post-commit events
 - reconciliation
 - integrity monitoring
-- election incidents
-- backup/recovery
-
-An integrity anomaly is never silently corrected.
+- election incident management
 
 ---
 
-# Live Results
+# 15. Integrity Reconciliation
 
-Student-facing live results are intentionally limited.
+The system continuously verifies relationships such as:
 
-Students can see:
+```text
+Eligibility
+   ↔
+Participation
+   ↔
+Cast Ballots
+   ↔
+Ballot Items
+   ↔
+Result Calculations
+   ↔
+Live Aggregates
+```
 
-### Overall Cast Votes
+Examples of integrity anomalies include:
 
-The total number of successfully committed ballots/cast participation according to the authoritative election data.
+- participation without a ballot
+- ballot without valid participation context
+- incomplete ballot
+- invalid candidate/contest combination
+- aggregate mismatch
+- result calculation mismatch
 
-### Anonymous Candidate Leaderboards
+An anomaly is recorded and investigated.
+
+It is not silently corrected.
+
+---
+
+# 16. Results Engine
+
+Results are derived from authoritative committed ballots.
+
+The result chain is:
+
+```text
+Committed Ballots
+      ↓
+Ballot Selections
+      ↓
+Result Calculation
+      ↓
+Result Aggregates
+      ↓
+Result Snapshot
+```
+
+The system supports:
+
+- overall election results
+- contest/position results
+- candidate totals
+- candidate ranking
+- multi-seat results
+- college breakdowns
+- course/program breakdowns
+- year-level breakdowns
+- applicable sector breakdowns
+- participation
+- abstention
+- percentages
+
+Candidate ranking is based on final vote totals. It is not ranked-choice voting.
+
+---
+
+# 17. Tie Handling
+
+The system detects and flags ties.
+
+The election platform does not automatically choose a winner.
+
+Tie resolution belongs to the COMELEC President and authorized heads outside the election engine.
+
+The resulting institutional decision can be recorded for historical and audit purposes.
+
+---
+
+# 18. Live Results Architecture
+
+Student-facing live results are intentionally limited to:
+
+### Overall cast votes
+
+The current total number of successfully committed/counted ballots according to authoritative election data.
+
+### Anonymous candidate leaderboards
 
 Students can see:
 
@@ -375,9 +629,29 @@ Students can see:
 - current rank
 - applicable seat/leaderboard information
 
-Students cannot see who voted for whom.
+The student-facing realtime system must not expose:
 
-The live-results architecture is designed to scale using:
+- voter identity
+- Student ID
+- institutional email
+- ballot ID
+- submission UUID
+- receipt/reference number
+- individual selections
+- student-to-candidate relationships
+- administrative diagnostics
+
+Realtime is a delivery layer only.
+
+If realtime delivery fails, voting data remains safe and the client can resynchronize from authoritative backend data.
+
+---
+
+# 19. Realtime Scalability
+
+The realtime architecture is designed to support many simultaneous viewers.
+
+Conceptually:
 
 ```text
 MySQL
@@ -386,47 +660,138 @@ Result Aggregation
   ↓
 Redis / Pub-Sub
   ↓
-Reverb / WebSockets
+Reverb / WebSocket Servers
   ↓
-Many Connected Clients
+Connected Students and Administrators
 ```
 
-The number of realtime viewers should be scalable by adding infrastructure capacity rather than changing election logic.
+Realtime servers can scale horizontally.
+
+The election database remains authoritative regardless of the number of connected viewers.
+
+A realtime outage must not become a vote-integrity outage.
 
 ---
 
-# Results and Reconciliation
+# 20. Audit Logging
 
-Results are calculated from authoritative committed ballots.
+Audit logging records important operational and security events, including:
 
-The system supports:
+- authentication events
+- administrative actions
+- election lifecycle changes
+- approvals
+- student-data changes
+- imports
+- candidate changes
+- result calculations
+- exports
+- backup operations
+- security events
+- sensitive administrative access
 
-- whole-election results
-- contest/position results
-- candidate totals
-- college breakdowns
-- course/program breakdowns
-- year-level breakdowns
-- sector breakdowns where applicable
-- participation
-- abstention
-- percentages
-- candidate ranking
-- multi-seat contests
+Audit logs must not contain:
 
-Candidate ranking means ranking candidates by final vote total. It is not ranked-choice voting.
+- passwords
+- authentication tokens
+- candidate selections
+- unnecessary sensitive personal data
 
-## Tie handling
-
-The system detects and flags ties.
-
-The application does **not** decide the winner.
-
-Tie resolution is an institutional/COMELEC decision outside the election engine. The final decision may be recorded for historical and audit purposes.
+Audit logging must support investigation without becoming a mechanism for reconstructing individual ballot choices.
 
 ---
 
-# Finalized Election Integrity
+# 21. Election Incident Management
+
+Election incidents are separate from routine audit logs.
+
+Incidents may include:
+
+- vote integrity anomalies
+- participation/ballot mismatch
+- result mismatch
+- invalid ballot conditions
+- database failure
+- queue failure
+- realtime failure
+- backup/restore incidents
+- security incidents
+- configuration issues
+
+Each incident preserves:
+
+- what happened
+- when it happened
+- how it was detected
+- investigation history
+- resolution
+- responsible administrators
+- supporting records
+
+---
+
+# 22. Administrative Security
+
+The system has exactly three authorized IT administrators.
+
+All three use the same base role:
+
+```text
+BUKSU_COMELEC_IT_ADMIN
+```
+
+The platform does not provide normal functionality for admins to:
+
+- create another admin
+- delete another admin
+- change admin roles
+- manage the authorized administrator identities
+
+For controlled changes:
+
+```text
+Admin proposes
+      ↓
+All admins notified
+      ↓
+Independent admin approves/rejects
+      ↓
+Change applied
+      ↓
+Audit recorded
+```
+
+The proposer cannot approve their own request.
+
+Highly sensitive election operations may require stronger dual-control authorization.
+
+---
+
+# 23. Backup and Disaster Recovery
+
+Backup and recovery are first-class platform functions.
+
+The architecture supports:
+
+- automatic database backups
+- downloadable full backups
+- encrypted backup archives
+- election archive packages
+- uploaded-file/asset backups
+- backup manifests
+- cryptographic integrity checks
+- separate/offsite backup copies
+- restore verification
+- restore testing
+- disaster recovery procedures
+
+A backup is not considered reliable merely because a backup job completed successfully.
+
+Backups must be verified and periodically restored in a controlled environment.
+
+---
+
+# 24. Finalized Election Integrity Lock
 
 When an election reaches:
 
@@ -436,264 +801,227 @@ FINALIZED
 
 it becomes immutable.
 
-Normal administrators cannot alter:
+Normal administration cannot modify:
 
 - election configuration
 - eligibility snapshot
 - candidate roster
-- ballots
+- participation
+- cast ballots
 - ballot selections
 - vote totals
 - final results
-- participation totals
 
-The finalized election becomes part of the institutional Election History.
-
-Historical elections are:
-
-- searchable
-- read-only
-- reportable
-- auditable
-- archivable
-
-A previous election may be reused as a **configuration starting point** for a future election, but votes, participation, ballots, receipts, and final results are never copied into a new election.
+If a genuine post-election issue must be recorded, it is handled through a separate incident/correction record without silently rewriting the finalized election.
 
 ---
 
-# Backup and Disaster Recovery
+# 25. Election History
 
-Backup is a first-class subsystem.
+The platform maintains a searchable history of previous elections.
 
-Planned capabilities include:
+Historical elections can retain:
 
-- automated database backups
-- downloadable full backups
-- encrypted backup archives
-- election archive packages
-- backup manifests
-- SHA-256 integrity verification
-- separate/offsite copies
-- restore testing
-- recovery procedures
-- backup/download history
+- election metadata
+- configuration snapshot
+- eligibility snapshot
+- candidate roster
+- final results
+- participation
+- reconciliation history
+- incident history
+- audit history
+- archive information
 
-A backup is not considered trustworthy merely because the backup job completed. Backups must be verified and periodically restored in a controlled test environment.
+Historical elections are read-only.
 
----
+A previous election may be used as a starting configuration for a future election.
 
-# Audit and Incident Management
+The new election must never inherit:
 
-Audit logs and election incidents are separate concepts.
-
-Audit logs record operational/security events such as:
-
-- authentication
-- admin actions
-- election lifecycle changes
-- imports
-- approvals
-- candidate changes
-- exports
-- backup operations
-- security events
-
-Audit logs must not contain ballot selections or unnecessary sensitive information.
-
-Election incidents track issues such as:
-
-- vote integrity anomalies
-- reconciliation mismatches
-- database incidents
-- realtime failures
-- import issues
-- security incidents
-- production recovery events
+- votes
+- ballots
+- participation
+- receipts
+- final results
 
 ---
 
-# Administration
+# 26. Reporting and Official Results
 
-There are exactly three authorized IT administrators.
+The results subsystem can generate reports covering:
 
-They have the same base role:
+- overall election
+- contest/position
+- candidate
+- college
+- course/program
+- year
+- sector where applicable
+- participation
+- abstention
+- validation
+- reconciliation
+- incidents
+
+The system is designed to produce reproducible result snapshots.
+
+The external publication of officially approved results remains an institutional process; the platform maintains and exports the official election record.
+
+---
+
+# 27. System Reliability
+
+The architecture distinguishes critical and non-critical services.
+
+Secondary service failures should not corrupt authoritative election data.
+
+Examples:
+
+- Realtime failure should not lose votes.
+- Queue failure should not undo committed votes.
+- Notification failure should not stop voting.
+- Report generation failure should not corrupt election data.
+- Backup-generation failure should not alter votes.
+- Database failure should cause safe refusal of new commits rather than accepting unverifiable votes.
+
+---
+
+# 28. Scalability
+
+The same election engine must support:
+
+- small elections
+- college elections
+- department elections
+- year-level elections
+- sectoral elections
+- university-wide elections
+
+Scaling is achieved through:
+
+- infrastructure capacity
+- database optimization
+- background processing
+- caching/aggregation
+- horizontally scaled realtime services
+- queue workers
+- appropriate indexing
+- load testing
+
+Election logic must not fork into separate "small election" and "large election" implementations.
+
+---
+
+# 29. Historical and Institutional Continuity
+
+The platform is designed to become a long-term institutional election record.
+
+Each completed election forms a preserved unit of:
 
 ```text
-BUKSU_COMELEC_IT_ADMIN
-```
-
-The application does not provide normal functionality for admins to create, delete, promote, or demote other admins.
-
-For controlled changes:
-
-```text
-Admin proposes
-      ↓
-All admins notified
-      ↓
-Different admin approves/rejects
-      ↓
-Change applied
-      ↓
-Audit recorded
-```
-
-The person who proposes a change cannot approve their own request.
-
-More sensitive election-critical operations may require stronger dual-control procedures.
-
----
-
-# Development Philosophy
-
-This project should be implemented in controlled phases.
-
-```text
-Architecture / Documentation
-        ↓
-Database / Domain Foundation
-        ↓
-Authentication / Authorization
-        ↓
-Student / Data Center
-        ↓
-Election Engine
-        ↓
+Configuration
++
 Eligibility
-        ↓
-Candidates
-        ↓
-Voting
-        ↓
-Vote Integrity
-        ↓
-Results / Reconciliation
-        ↓
-Live Results
-        ↓
-Audit / Incidents
-        ↓
-Backup / Disaster Recovery
-        ↓
-Security Hardening
-        ↓
-Integration Tests
-        ↓
-Mock Election
-        ↓
-Load / Failure / Security Testing
-        ↓
-Production Readiness
++
+Candidate Roster
++
+Participation
++
+Ballot Data
++
+Results
++
+Reconciliation
++
+Incidents
++
+Audit History
++
+Archive Metadata
 ```
 
-Major phases should not be skipped simply because a feature appears to work in the browser.
-
-Each phase should have:
-
-- implementation
-- automated tests
-- integrity checks
-- documentation
-- review
-- explicit completion criteria
+This allows future elections to be built using the same engine while preserving previous elections as immutable institutional history.
 
 ---
 
-# Project Documentation
+# 30. Overall System Flow
 
-The repository is expected to maintain these authoritative project documents:
+The complete platform follows this general lifecycle:
 
 ```text
-CLAUDE.md
-docs/
-├── REQUIREMENTS.md
-├── NON_NEGOTIABLES.md
-├── ARCHITECTURE.md
-├── DATABASE.md
-├── ELECTION_RULES.md
-├── ELECTION_CONFIGURATION.md
-├── ELIGIBILITY_ENGINE.md
-├── VOTING_FLOW.md
-├── STUDENT_MANAGEMENT.md
-├── CANDIDATE_MANAGEMENT.md
-├── RESULTS_AND_ANALYTICS.md
-├── SECURITY_AND_PRIVACY.md
-├── AUDIT_LOGGING.md
-├── DATA_IMPORT.md
-├── BACKUP_AND_RECOVERY.md
-├── TEST_PLAN.md
-├── DEPLOYMENT.md
-├── OPEN_DECISIONS.md
-└── CHANGE_LOG.md
+Configure Election
+        ↓
+Define Eligibility
+        ↓
+Prepare Candidates
+        ↓
+Review and Approve
+        ↓
+Create Snapshots
+        ↓
+Lock Election
+        ↓
+Schedule / Open
+        ↓
+Accept Secure Votes
+        ↓
+Record Participation
+        ↓
+Commit Immutable Ballots
+        ↓
+Calculate Results
+        ↓
+Publish Anonymous Live Aggregates
+        ↓
+Reconcile
+        ↓
+Validate Results
+        ↓
+Official Announcement
+        ↓
+Finalize
+        ↓
+Archive as Historical Election
 ```
 
-These documents are part of the system's engineering control and should be updated as architectural decisions are finalized.
+When an integrity or operational problem occurs:
+
+```text
+Detect
+  ↓
+Protect / Pause if necessary
+  ↓
+Preserve Evidence
+  ↓
+Create Incident
+  ↓
+Investigate
+  ↓
+Reconcile
+  ↓
+Recover
+  ↓
+Document Resolution
+```
 
 ---
 
-# Repository Rules
+# 31. System Design Objective
 
-Before major implementation work:
+BUKSU COMELEC 2.0 is designed to become a long-term institutional election platform with a strong emphasis on:
 
-1. Review the architecture documentation.
-2. Identify dependencies and affected domains.
-3. Propose the design.
-4. Implement the smallest safe change.
-5. Add tests.
-6. Run the relevant test suite.
-7. Record important changes and decisions.
-8. Do not silently change architectural rules.
+**Election integrity**  
+**Ballot secrecy**  
+**Reliability**  
+**Auditability**  
+**Scalability**  
+**Recoverability**  
+**Configurability**  
+**Historical preservation**
 
-Never implement a convenience shortcut that weakens:
+The system should remain useful whether an election involves a small group of voters or a university-wide population.
 
-- ballot secrecy
-- vote integrity
-- election immutability
-- auditability
-- recoverability
-- authorization
-- scalability
+The objective is not simply to make voting work.
 
----
-
-# Current Development State
-
-At the current starting point:
-
-- Laravel is being set up.
-- Blade is configured.
-- Livewire is configured.
-- MySQL is connected.
-- The election application has not yet been implemented.
-
-The next engineering step is to establish the repository/documentation baseline and perform a project audit before building the domain/database layer.
-
----
-
-# Vision
-
-BUKSU COMELEC 2.0 is intended to become a **long-term institutional election platform** that can safely operate elections of different sizes and different rules without becoming a collection of one-off election implementations.
-
-The system should be:
-
-**Reusable.  
-Configurable.  
-Scalable.  
-Auditable.  
-Recoverable.  
-Secure.  
-Ballot-secret preserving.  
-Resistant to vote corruption.  
-Designed for failure.**
-
-> **Prevent → Validate → Commit → Protect → Detect → Reconcile → Recover → Preserve**
-
----
-
-## Development Advisory
-
-Architecture and major changes should be reviewed before implementation.
-
-Claude is used as the implementation assistant. The project owner retains control over architecture, business rules, approval decisions, and production readiness.
-
-Never treat generated code as automatically correct simply because it compiles or the UI appears to work.
+The objective is to make the entire election lifecycle **controlled, verifiable, recoverable, reproducible, and suitable for long-term institutional use.**
