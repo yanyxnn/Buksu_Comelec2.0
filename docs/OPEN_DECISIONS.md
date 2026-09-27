@@ -15,6 +15,11 @@ These items must not be hard-coded until officially confirmed.
 - Exact two-admin/two-approval thresholds for exceptional high-risk operations.
 - Exact election recovery/resume procedure after catastrophic outage.
 - RPO/RTO targets.
+- Minimum-cell-size suppression threshold for detailed reporting, especially small sector/college/year combinations.
+- Standard denominator policy for contest abstention percentages and candidate vote percentages:
+  eligible contest voters vs. participating/voting contest voters.
+- Whether student parties are persistent institutionally-recognized entities across elections or remain election-scoped.
+- Exact student Google Workspace login matching/provisioning rule (automatic email-based linking vs. controlled/admin provisioning), subject to the university's Google Workspace configuration.
 
 ## Scale targets
 - Expected total voters.
