@@ -47,6 +47,11 @@ Key fields:
 - `college`, `course`, `year_level`, `status`.
 - `effective_from`.
 
+Constraint:
+- `UNIQUE(import_batch_id, student_id)`.
+
+Each row is the placement reported for a student by one official Data Center import. An import may contain at most one placement record per student. Duplicate student IDs within the same uploaded file are handled through `import_batch_rows` (classified `DUPLICATE_IN_FILE`) and do not become multiple enrollment rows. The same student may have enrollment rows across different import batches; those rows preserve historical placement. The uniqueness constraint also protects chunked-import retry/idempotency, so a retried chunk cannot insert the same placement twice.
+
 The course-change rule is applied when the new course placement is recorded: a student entering a new course becomes `1st Year` in that new course. Year level is not derived from individual subjects.
 
 ### `admin_users`
