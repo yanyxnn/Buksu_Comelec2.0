@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -27,14 +28,18 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('ballot_contest_responses', function (Blueprint $table) {
+        $enums = [
+            'response_type' => ['VOTE', 'ABSTAIN'],
+        ];
+
+        Schema::create('ballot_contest_responses', function (Blueprint $table) use ($enums) {
             $table->engine = 'InnoDB';
 
             $table->ulid('id')->primary();
             $table->foreignUlid('ballot_id');
             $table->unsignedBigInteger('contest_id');
             $table->foreignId('election_id')->constrained('elections')->restrictOnDelete();
-            $table->enum('response_type', ['VOTE', 'ABSTAIN']);
+            $table->enum('response_type', $enums['response_type']);
             $table->timestamp('created_at')->useCurrent();
 
             $table->foreign(['ballot_id', 'election_id'], 'bcr_ballot_same_election_fk')
@@ -49,6 +54,17 @@ return new class extends Migration
             // Anchor for ballot_candidate_selections' response-contest FK.
             $table->unique(['id', 'contest_id'], 'bcr_id_contest_unique');
         });
+
+        // CHECK mirrors the ENUM so an out-of-set value is rejected even under a
+        // permissive sql_mode (where a bare ENUM silently stores ''). MySQL/MariaDB
+        // only: SQLite already receives an equivalent CHECK from enum() and cannot
+        // ALTER ... ADD CONSTRAINT.
+        if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            DB::statement(
+                'ALTER TABLE `ballot_contest_responses` ADD CONSTRAINT `chk_ballot_contest_responses_response_type` '
+                ."CHECK (`response_type` IN ('".implode("', '", $enums['response_type'])."'))"
+            );
+        }
     }
 
     public function down(): void

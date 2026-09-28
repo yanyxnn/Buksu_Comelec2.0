@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Schema;
  * an admin, a student, an import batch, a Domain B ULID-keyed row, etc. —
  * a single polymorphic FK type cannot span both bigint and ULID primary
  * keys. This table must NEVER be designed to store candidate selections
- * (docs/DATABASE.md §21) — that is a standing review rule for every future
+ * (docs/DATABASE.md §10) — that is a standing review rule for every future
  * writer, not something this schema can itself enforce. Append-only:
  * `created_at` only, no `updated_at`.
  */

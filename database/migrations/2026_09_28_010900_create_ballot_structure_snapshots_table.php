@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -18,7 +19,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('ballot_structure_snapshots', function (Blueprint $table) {
+        $enums = [
+            'status' => ['DRAFT', 'LOCKED'],
+        ];
+
+        Schema::create('ballot_structure_snapshots', function (Blueprint $table) use ($enums) {
             $table->engine = 'InnoDB';
 
             $table->id();
@@ -27,7 +32,7 @@ return new class extends Migration
             $table->unsignedBigInteger('candidate_roster_snapshot_id');
             $table->unsignedBigInteger('eligibility_snapshot_id');
             $table->unsignedInteger('version_number');
-            $table->enum('status', ['DRAFT', 'LOCKED'])->default('DRAFT');
+            $table->enum('status', $enums['status'])->default('DRAFT');
             $table->timestamp('locked_at')->nullable();
             $table->json('structure_json')->nullable();
             $table->timestamps();
@@ -49,6 +54,17 @@ return new class extends Migration
             // Cross-scope anchor for ballots (structure snapshot, election).
             $table->unique(['id', 'election_id'], 'bss_id_election_unique');
         });
+
+        // CHECK mirrors the ENUM so an out-of-set value is rejected even under a
+        // permissive sql_mode (where a bare ENUM silently stores ''). MySQL/MariaDB
+        // only: SQLite already receives an equivalent CHECK from enum() and cannot
+        // ALTER ... ADD CONSTRAINT.
+        if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            DB::statement(
+                'ALTER TABLE `ballot_structure_snapshots` ADD CONSTRAINT `chk_ballot_structure_snapshots_status` '
+                ."CHECK (`status` IN ('".implode("', '", $enums['status'])."'))"
+            );
+        }
     }
 
     public function down(): void
