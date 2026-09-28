@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -34,7 +35,13 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('result_aggregates', function (Blueprint $table) {
+        $enums = [
+            'metric_type' => ['CANDIDATE_VOTE_COUNT', 'CONTEST_ABSTAIN_COUNT', 'CONTEST_PARTICIPATION_COUNT', 'OVERALL_CAST_COUNT', 'OVERALL_PARTICIPATION_COUNT'],
+            'dimension_type' => ['OVERALL', 'COLLEGE', 'COURSE', 'YEAR_LEVEL', 'SECTOR'],
+            'denominator_type' => ['ELIGIBLE_ELECTION', 'ELIGIBLE_CONTEST', 'PARTICIPATING_CONTEST', 'VOTING_CONTEST'],
+        ];
+
+        Schema::create('result_aggregates', function (Blueprint $table) use ($enums) {
             $table->engine = 'InnoDB';
 
             $table->id();
@@ -42,16 +49,11 @@ return new class extends Migration
             $table->foreignId('election_id')->constrained('elections')->restrictOnDelete();
             $table->unsignedBigInteger('contest_id')->nullable();
             $table->unsignedBigInteger('candidacy_id')->nullable();
-            $table->enum('metric_type', [
-                'CANDIDATE_VOTE_COUNT', 'CONTEST_ABSTAIN_COUNT', 'CONTEST_PARTICIPATION_COUNT',
-                'OVERALL_CAST_COUNT', 'OVERALL_PARTICIPATION_COUNT',
-            ]);
-            $table->enum('dimension_type', ['OVERALL', 'COLLEGE', 'COURSE', 'YEAR_LEVEL', 'SECTOR']);
+            $table->enum('metric_type', $enums['metric_type']);
+            $table->enum('dimension_type', $enums['dimension_type']);
             $table->string('dimension_value')->nullable();
             $table->unsignedInteger('count');
-            $table->enum('denominator_type', [
-                'ELIGIBLE_ELECTION', 'ELIGIBLE_CONTEST', 'PARTICIPATING_CONTEST', 'VOTING_CONTEST',
-            ])->nullable();
+            $table->enum('denominator_type', $enums['denominator_type'])->nullable();
             $table->unsignedInteger('denominator_value')->nullable();
             $table->timestamps();
 
@@ -84,6 +86,25 @@ return new class extends Migration
                 ->references(['id', 'contest_id'])->on('candidacies')
                 ->restrictOnDelete();
         });
+
+        // CHECK mirrors the ENUM so an out-of-set value is rejected even under a
+        // permissive sql_mode (where a bare ENUM silently stores ''). MySQL/MariaDB
+        // only: SQLite already receives an equivalent CHECK from enum() and cannot
+        // ALTER ... ADD CONSTRAINT.
+        if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            DB::statement(
+                'ALTER TABLE `result_aggregates` ADD CONSTRAINT `chk_result_aggregates_metric_type` '
+                ."CHECK (`metric_type` IN ('".implode("', '", $enums['metric_type'])."'))"
+            );
+            DB::statement(
+                'ALTER TABLE `result_aggregates` ADD CONSTRAINT `chk_result_aggregates_dimension_type` '
+                ."CHECK (`dimension_type` IN ('".implode("', '", $enums['dimension_type'])."'))"
+            );
+            DB::statement(
+                'ALTER TABLE `result_aggregates` ADD CONSTRAINT `chk_result_aggregates_denominator_type` '
+                ."CHECK (`denominator_type` IN ('".implode("', '", $enums['denominator_type'])."'))"
+            );
+        }
     }
 
     public function down(): void

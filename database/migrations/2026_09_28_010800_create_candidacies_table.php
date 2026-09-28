@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -19,7 +20,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('candidacies', function (Blueprint $table) {
+        $enums = [
+            'status' => ['DRAFT', 'FOR_REVIEW', 'VERIFIED', 'APPROVED', 'PUBLISHED', 'LOCKED', 'WITHDRAWN', 'DISQUALIFIED'],
+        ];
+
+        Schema::create('candidacies', function (Blueprint $table) use ($enums) {
             $table->engine = 'InnoDB';
 
             $table->id();
@@ -30,10 +35,7 @@ return new class extends Migration
             $table->string('display_name');
             $table->string('photo_path')->nullable();
             $table->text('bio')->nullable();
-            $table->enum('status', [
-                'DRAFT', 'FOR_REVIEW', 'VERIFIED', 'APPROVED', 'PUBLISHED', 'LOCKED',
-                'WITHDRAWN', 'DISQUALIFIED',
-            ])->default('DRAFT');
+            $table->enum('status', $enums['status'])->default('DRAFT');
             $table->unsignedBigInteger('roster_snapshot_id')->nullable();
             $table->timestamps();
 
@@ -58,6 +60,17 @@ return new class extends Migration
             $table->unique(['candidate_id', 'contest_id']);
             $table->index(['election_id', 'contest_id', 'status']);
         });
+
+        // CHECK mirrors the ENUM so an out-of-set value is rejected even under a
+        // permissive sql_mode (where a bare ENUM silently stores ''). MySQL/MariaDB
+        // only: SQLite already receives an equivalent CHECK from enum() and cannot
+        // ALTER ... ADD CONSTRAINT.
+        if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            DB::statement(
+                'ALTER TABLE `candidacies` ADD CONSTRAINT `chk_candidacies_status` '
+                ."CHECK (`status` IN ('".implode("', '", $enums['status'])."'))"
+            );
+        }
     }
 
     public function down(): void

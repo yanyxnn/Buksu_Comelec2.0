@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -28,7 +29,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('student_enrollments', function (Blueprint $table) {
+        $enums = [
+            'status' => ['ACTIVE', 'INACTIVE'],
+        ];
+
+        Schema::create('student_enrollments', function (Blueprint $table) use ($enums) {
             $table->engine = 'InnoDB';
 
             $table->id();
@@ -37,13 +42,24 @@ return new class extends Migration
             $table->string('college', 100);
             $table->string('course', 100);
             $table->string('year_level', 100);
-            $table->enum('status', ['ACTIVE', 'INACTIVE']);
+            $table->enum('status', $enums['status']);
             $table->timestamp('effective_from');
             $table->timestamps();
 
             $table->unique(['import_batch_id', 'student_id']);
             $table->index(['student_id', 'effective_from']);
         });
+
+        // CHECK mirrors the ENUM so an out-of-set value is rejected even under a
+        // permissive sql_mode (where a bare ENUM silently stores ''). MySQL/MariaDB
+        // only: SQLite already receives an equivalent CHECK from enum() and cannot
+        // ALTER ... ADD CONSTRAINT.
+        if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            DB::statement(
+                'ALTER TABLE `student_enrollments` ADD CONSTRAINT `chk_student_enrollments_status` '
+                ."CHECK (`status` IN ('".implode("', '", $enums['status'])."'))"
+            );
+        }
     }
 
     public function down(): void

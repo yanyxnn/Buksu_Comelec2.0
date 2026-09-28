@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
  * Append-only events within an incident. Kept separate from ballot-specific
  * lifecycle (ballot_events/ballot_dispositions below), so a general
  * incident record can never accidentally introduce a voter/ballot
- * correlation (docs/DATABASE.md §21).
+ * correlation (docs/DATABASE.md §7, §10).
  */
 return new class extends Migration
 {
