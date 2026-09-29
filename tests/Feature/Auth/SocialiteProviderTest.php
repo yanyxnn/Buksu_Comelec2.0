@@ -66,5 +66,5 @@ test('the app binding uses Socialite in production and Google credentials are no
 
     expect(file_get_contents(base_path('.env.example')))->toContain('GOOGLE_CLIENT_ID=')
         ->and(file_get_contents(base_path('.env.example')))->not->toMatch('/GOOGLE_CLIENT_SECRET=\S/');
-    expect(config('services.google.client_secret'))->toBeNull();
+    expect(blank(config('services.google.client_secret')))->toBeTrue();
 });
