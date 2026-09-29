@@ -34,3 +34,6 @@ FINALIZED elections are read-only historical records. Prior elections may seed c
 
 ## 8. Security principle
 Least privilege, controlled admin operations, secret separation, audit logging, ballot secrecy, encrypted backups, restore testing, and explicit incident handling.
+
+## 9. Authentication & authorization (Phase 02)
+Two identity domains, two guards: `student` (table `students`, subject `google_subject`) and `admin` (table `admin_users`, exactly three, role `BUKSU_COMELEC_IT_ADMIN`). Google OAuth via Socialite is the only login. One login page and one callback; `IdentityResolver` maps a verified Google identity to exactly one domain or denies it. Admin routes and Livewire updates pass `EnsureAdmin`; student routes pass `EnsureStudent`. The generic `change_requests` mechanism provides proposal/approval (requester never decides own request). See `SECURITY_AND_PRIVACY.md` and `DATABASE.md`.

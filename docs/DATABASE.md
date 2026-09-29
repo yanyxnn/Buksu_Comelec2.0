@@ -917,6 +917,15 @@ Phase 01C includes the approved D3 identifier correction and will verify MySQL i
 
 \- capacity targets and load thresholds.
 
-\- exact change-request workflow implementation.
+\- exact change-request workflow implementation (generic mechanism implemented in Phase 02, see below; real action types remain open).
 
 \- exact ballot-disposition scoping if future incidents require per-result-run treatment.
+
+## Phase 02 additions
+- `change_requests` (bigint PK): `action_type`, `subject_type/id`, `payload_json`, `status` enum PENDING/APPROVED/REJECTED, `requested_by` and `decided_by` FK `admin_users` (RESTRICT), `decided_at`, `decision_note`. MySQL/MariaDB CHECKs: status set; decided rows carry decider+time and pending rows do not; `decided_by <> requested_by`. SQLite cannot add these (same limitation as existing enum CHECKs); the decision UPDATE also carries the predicates.
+- `notifications`: standard Laravel database-notification table (in-app approval notifications).
+- `access_issue_reports` (Login / Access Reports): `problem_type` (student-chosen; plain string validated against `config('comelec.access_issue_problem_types')`, deliberately not a DB enum), `google_email` (verified institutional email), `reported_student_id` (as typed, unverified), `description`, `denial_reason` (SYSTEM-generated: why authentication denied the login; never student-supplied), `subject_fingerprint` (16-hex keyed hash), timestamps. No token/`sub` columns; no FK to `students`. Login / Access Reports (cannot authenticate) are distinct from the future General Reports (Phase 03, authenticated users), which are not part of Phase 02.
+- Student login treats `students.last_import_batch_id IS NOT NULL` as "loaded by the official Data Center import".
+- `admin_users.role` CHECK = `BUKSU_COMELEC_IT_ADMIN` (MySQL/MariaDB only). Exactly-three cardinality is enforced at runtime, not by the schema.
+- `users` and `password_reset_tokens` dropped by a forward migration (reversible). `sessions` retained.
+- Cross-table uniqueness of Google `sub` (admin vs student) is not expressible as a constraint without triggers; it is enforced at provisioning, at first-link, and re-checked on every login.
