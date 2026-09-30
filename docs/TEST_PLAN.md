@@ -46,3 +46,47 @@ Automated with a fake Google provider; no real Google calls. Suites: `tests/Feat
 - Admin/student route protection, no admin-management routes, Livewire persistent-middleware boundary (real HTTP to the update endpoint; `Livewire::test()` bypasses it).
 - Approvals: self-approve/reject refused, approval/rejection by another admin, atomic race, all-admin in-app notification in the same transaction, audit evidence, no sensitive data.
 - Engine notes: the MySQL/MariaDB CHECK test skips on SQLite; the case-variant-duplicate-email test skips on case-insensitive engines. **Still to do:** a real Google OAuth smoke test on staging (documented, not part of the automated suite). Running on MySQL 8 is not a Phase 02 gate.
+
+## Testing layers
+
+Unit → Feature → Integration → Database integrity → Concurrency/idempotency → Security → Realtime/load → Disaster recovery → Full mock election → Production readiness.
+
+The test strategy distinguishes between:
+
+- design approval
+- implementation
+- verification
+- production-readiness gates
+
+Passing application tests does not by itself establish database integrity, ballot secrecy, concurrency safety, or production readiness.
+
+---
+
+# 1. Core testing principles
+
+The system must prove that authoritative election data remains correct under:
+
+- normal voting
+- duplicate requests
+- retries
+- transaction failure
+- database failure
+- concurrent submissions
+- election pause/close races
+- unauthorized database access
+- invalid ballot content
+- reconciliation anomalies
+- result recalculation
+
+Critical integrity must be demonstrated against the authoritative MySQL/MariaDB database engine rather than relying only on SQLite application tests.
+
+---
+
+# 2. Phase 01B regression
+
+The canonical Phase 01B integrity suite remains the baseline schema regression test.
+
+Expected result:
+
+```text
+76 passed / 0 failed

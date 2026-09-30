@@ -14,34 +14,59 @@ Laravel migrations are the executable schema source of truth (established in Pha
 
 \---
 
-**## Implementation status**
+## Implementation status
 
-This section records the current repository state. The approved architecture remains the baseline; the implemented Phase 01B state and approved Phase 01C correction are called out explicitly where they differ.
+This section records the current repository state. The approved architecture remains the baseline, while implementation and verification progress are recorded explicitly so the documentation does not confuse design approval with implementation or verification.
 
-**### Phase 01A**
+### Phase 01A
 
-Approved architecture/domain baseline.
+Approved architecture and domain-model baseline.
 
-**### Phase 01B**
+### Phase 01B
 
-The approved schema has been converted to Laravel migrations, and the implementation has been merged into `main`.
+The approved database schema has been implemented through Laravel migrations and database-integrity hardening.
 
-- ENUM domains were hardened with named CHECK constraints.
-- The implemented schema has **23 guarded ENUM columns**, each with a corresponding named CHECK constraint.
-- `election_incidents.severity` is intentionally a nullable `VARCHAR(255)`. It is not an ENUM and is not CHECK-constrained.
-- `ballots.status` remains `CAST`-only, with `CAST` as the only valid ballot status.
-- `ballot_dispositions.disposition` contains `VOIDED` alongside `EXCLUDED_FROM_CALCULATION` and `REINSTATED`.
+Verified schema characteristics include:
 
-Phase 01B verification evidence:
-- canonical integrity suite
-- MariaDB 10.4.32
-- **76 passed / 0 failed**
+- 23 guarded ENUM columns.
+- Each guarded ENUM column has a corresponding named CHECK constraint.
+- `election_incidents.severity` is intentionally nullable `VARCHAR(255)` and is not ENUM/CHECK constrained.
+- `ballots.status` is `CAST` only.
+- `ballot_dispositions.disposition` includes `VOIDED`, `EXCLUDED_FROM_CALCULATION`, and `REINSTATED`.
 
-This is verification evidence from a local test environment. It is not a production deployment claim.
+Phase 01B integrity verification evidence:
 
-**### Phase 01C**
+- Canonical local MariaDB 10.4.32 verification: **76 passed / 0 failed**.
+- The Phase 01B verification remains the baseline regression gate for the database schema.
 
-Database integrity testing is the active phase. Design is approved; implementation has **not yet started**. The approved Phase 01C D3 identifier correction (Section 14) is **not yet implemented**.
+### Phase 01C
+
+Database integrity, concurrency, security, and reconciliation testing is in progress.
+
+The Phase 01C design and transaction/security decisions are approved. A substantial portion of the Phase 01C verification harness has now been implemented and exercised.
+
+Verified so far:
+
+- Phase 01C baseline: **23 passed / 0 failed**.
+- Extended Phase 01C suite: **56 passed / 0 failed**.
+- Reconciliation oracles: **11 passed / 0 failed**.
+- Phase 01B regression verification was re-confirmed during the Phase 01C verification sequence.
+- The full Phase 01C verification sequence was executed twice with identical results.
+- Concurrency cases include duplicate-submission races, forced deadlock behavior, blocking close/vote behavior, and stale-read canary behavior.
+- Database-role security checks include real MariaDB privilege enforcement.
+- Reconciliation testing includes clean fixtures and deliberately seeded corruption cases.
+
+The expanded Phase 01C verification work was exercised on MariaDB 10.11.14 in the verification environment.
+
+**Important:** MariaDB 10.4.32 remains a required Phase 01C completion gate for the expanded Phase 01C suite. The 10.11.14 results are verification evidence but do not replace the required MariaDB 10.4.32 gate.
+
+The approved Phase 01C D3 identifier correction has been implemented:
+
+- Domain A participation/submission identifiers remain ULID-based.
+- Domain B ballot-secrecy-sensitive identifiers use UUIDv4 where approved.
+- The correction is documented in the change history and related database/security documentation.
+
+Phase 01C remains **IN PROGRESS** until all required security, regression, concurrency, reconciliation, MariaDB-version, and sign-off gates are satisfied.
 
 \---
 
