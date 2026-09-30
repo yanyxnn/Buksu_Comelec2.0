@@ -32,7 +32,16 @@ Build BUKSU COMELEC 2.0 as a reusable, configurable, secure election platform fo
 - Laravel Reverb/Echo for realtime delivery
 
 ## Core roles
-Exactly three authorized IT admin Google identities are provisioned outside the application. All have the same role: `BUKSU_COMELEC_IT_ADMIN`. There is no admin-management UI. Candidates are normal students; they do not have candidate accounts.
+
+Administrator accounts are pre-authorized system records and are provisioned independently of Data Center student imports. There is no public administrator registration or self-registration flow.
+
+Each authorized administrator has a pre-authorized personal Google email before first login. `admin_users.google_subject` may be `NULL` until first successful Google login; the verified Google email is matched to the pre-authorized record and the stable Google `sub` is then bound. Subsequent administrator authentication uses the bound stable `sub`.
+
+The current initial roster consists of three operationally authorized IT administrators, all with role `BUKSU_COMELEC_IT_ADMIN`. The current count of three is an operational roster decision, not a permanent database or application cardinality limit. Do not introduce a permanent `MAX_ADMINS = 3` schema rule.
+
+Data Center imports apply to student master data only and never create, discover, or provision administrator records.
+
+Candidates are normal students; they do not have candidate accounts.
 
 ## Student identity rules
 - Institutional/Student ID is the permanent student identity.

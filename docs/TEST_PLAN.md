@@ -40,9 +40,15 @@ Automated with a fake Google provider; no real Google calls. Suites: `tests/Feat
 - One Google login entry point (no credentials form, no separate admin login, exact authentication route inventory).
 - Student login, first-link, repeat login by `sub`, INACTIVE student can authenticate, no student created, no Google data written, non-Data Center-loaded rows denied.
 - Access Issue flow: same message for every denial; only verified institutional accounts can submit (non-institutional, look-alike and unverified accounts cannot); every problem type accepted/stored, invalid or missing type rejected, list is config-backed and fails closed when empty; `denial_reason` stays system-generated and independent of `problem_type`; no student created/changed, no access granted, single-use, validation, rate limit, no OAuth values stored/logged; admin read-only view (all required columns, readable labels, escaping).
-- Admin login, unauthorized/unverified identities rejected, exactly-three roster and fixed-role enforcement, provisioning command rules.
-- Student/admin identity separation, duplicate/conflicting identity rejection, atomic first-link and unique-index behaviour.
-- Session fixation, logout, cross-guard isolation, mixed-session rejection.
+* Administrator authentication: pre-authorized admin records exist independently of Data Center imports; there is no public admin registration path; unauthorized Google accounts cannot create admin records.
+* Administrator first-link: a pre-authorized admin with `google_subject = NULL` can authenticate only when the Google email is verified and matches the pre-authorized `authorized_email`; the stable Google `sub` is then bound atomically.
+* Administrator first-link failure cases: unverified email, unknown email, non-matching authorized email, malformed identity, conflicting identity, duplicate authorized email, and attempted binding to a `sub` already used by another identity are denied safely.
+* Administrator repeat login uses the bound stable Google `sub`; an alternate `sub` does not replace an existing binding merely because the email matches.
+* Data Center import never creates, modifies, or deletes administrator records.
+* No public administrator registration, password registration, or self-promotion path exists.
+* The current three-admin roster and fixed `BUKSU_COMELEC_IT_ADMIN` role are enforced as the current operational authorization policy without introducing a permanent database cardinality constraint.
+* Admin route protection, Livewire persistent-middleware protection, cross-guard isolation, identity-conflict denial, and audit behavior remain tested as already specified.
+* Student first-link remains separate and continues to require an existing Data Center-loaded student row with `google_subject = NULL`.
 - Admin/student route protection, no admin-management routes, Livewire persistent-middleware boundary (real HTTP to the update endpoint; `Livewire::test()` bypasses it).
 - Approvals: self-approve/reject refused, approval/rejection by another admin, atomic race, all-admin in-app notification in the same transaction, audit evidence, no sensitive data.
 - Engine notes: the MySQL/MariaDB CHECK test skips on SQLite; the case-variant-duplicate-email test skips on case-insensitive engines. **Still to do:** a real Google OAuth smoke test on staging (documented, not part of the automated suite). Running on MySQL 8 is not a Phase 02 gate.
@@ -59,6 +65,8 @@ The test strategy distinguishes between:
 - production-readiness gates
 
 Passing application tests does not by itself establish database integrity, ballot secrecy, concurrency safety, or production readiness.
+
+* The implementation must test the distinction between administrator authorization and student Data Center provisioning: an administrator record must remain valid even though it is absent from all student import data, and importing student data must never create, discover, modify, or delete administrator records.
 
 ---
 

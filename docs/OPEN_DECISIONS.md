@@ -22,10 +22,23 @@ These items must not be hard-coded until officially confirmed.
 - Student Google Workspace login matching: **decided for Phase 02** as automatic first-link by exact institutional email (verified email + configured domain + existing student + null `google_subject`), then by Google `sub`. The real institutional domain and Workspace configuration still need institutional confirmation before staging/production.
 
 ## Authentication & approval (Phase 02)
-- How operators obtain each of the three admins' Google `sub` before provisioning (`admin_users.google_subject` is NOT NULL, so a row cannot exist without it). Operational decision, unresolved.
-- Real change-request action types and approval thresholds (the registry ships empty; see the high-risk approval item above).
-- General Reports (a Phase 03 concern) are distinct from the Phase 02 Login / Access Reports and are not implemented; their categories, statuses and workflow are undecided. Report status/handling for Access Issue reports is likewise not yet defined.
-- No admin replacement/departure procedure is defined or implemented; none has been invented.
+
+* Real change-request action types and approval thresholds (the registry ships empty; see the high-risk approval item above).
+* General Reports (a Phase 03 concern) are distinct from the Phase 02 Login / Access Reports and are not implemented; their categories, statuses and workflow are undecided. Report status/handling for Access Issue reports is likewise not yet defined.
+* No admin replacement/departure procedure is defined or implemented; none has been invented.
+
+### Resolved Phase 02 authentication decision — administrator identity lifecycle
+
+Administrator accounts are pre-authorized independently of the Data Center student import. Administrators do not publicly register or create their own administrator accounts.
+
+The current initial roster consists of three operationally authorized administrators. This is an operational roster decision, not a permanent database or application cardinality limit.
+
+Each administrator has a pre-authorized personal Google email before first login. `admin_users.google_subject` may be `NULL` before first successful login and is unique when populated.
+
+On first Google login, the verified Google email is matched to the existing pre-authorized administrator record. When the match succeeds and `google_subject` is `NULL`, the stable Google `sub` is bound to that existing record. Subsequent administrator authentication uses the bound stable Google `sub`.
+
+The Data Center import process is for student master data and must never create, discover, or provision administrator accounts.
+
 
 ## Scale targets
 - Expected total voters.

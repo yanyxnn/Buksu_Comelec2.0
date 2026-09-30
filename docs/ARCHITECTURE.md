@@ -36,4 +36,27 @@ FINALIZED elections are read-only historical records. Prior elections may seed c
 Least privilege, controlled admin operations, secret separation, audit logging, ballot secrecy, encrypted backups, restore testing, and explicit incident handling.
 
 ## 9. Authentication & authorization (Phase 02)
-Two identity domains, two guards: `student` (table `students`, subject `google_subject`) and `admin` (table `admin_users`, exactly three, role `BUKSU_COMELEC_IT_ADMIN`). Google OAuth via Socialite is the only login. One login page and one callback; `IdentityResolver` maps a verified Google identity to exactly one domain or denies it. Admin routes and Livewire updates pass `EnsureAdmin`; student routes pass `EnsureStudent`. The generic `change_requests` mechanism provides proposal/approval (requester never decides own request). See `SECURITY_AND_PRIVACY.md` and `DATABASE.md`.
+
+Two identity domains, two guards: `student` (table `students`, subject `google_subject`) and `admin` (table `admin_users`, subject `google_subject`, role `BUKSU_COMELEC_IT_ADMIN`). Google OAuth via Socialite is the only login mechanism.
+
+Student and administrator identities have separate provisioning sources. Student identity records are established and maintained through the official Data Center student-master-data process. Administrator records are pre-authorized system records and are not created, discovered, or provisioned from Data Center student imports.
+
+Administrators do not publicly register. There is no public admin registration flow, password registration flow, or admin self-registration path.
+
+The initial/current administrator roster consists of three operationally authorized administrators. This is an operational roster decision, not a permanent database or application cardinality limit. The system must not treat `3` as a permanent schema-level maximum.
+
+Each pre-authorized administrator has an authorized personal Google email recorded in the administrator account before first login. The authorized email is independent of the Google `sub` binding.
+
+`admin_users.google_subject` may be `NULL` before the administrator completes a successful first Google login. The field is unique when populated.
+
+On first Google login, the system requires a verified Google email and matches that verified Google email against the pre-authorized administrator record. On a successful email match, the administrator's stable Google `sub` is bound to that existing administrator record. The Google login does not create a new administrator account and does not grant administrator access solely because the email was presented by Google.
+
+After the first successful binding, subsequent administrator authentication resolves by the bound stable Google `sub`. The system does not replace an existing admin binding merely because another Google identity presents the same email.
+
+Student first-linking remains separate: a verified institutional Google email is matched to an existing Data Center-loaded student record whose `google_subject` is `NULL`, after which the stable Google `sub` is bound to that student record.
+
+`IdentityResolver` maps a verified Google identity to exactly one identity domain or denies it. A Google identity that would resolve to both domains is denied. Admin routes and Livewire updates pass `EnsureAdmin`; student routes pass `EnsureStudent`.
+
+The generic `change_requests` mechanism provides proposal/approval (requester never decides own request).
+
+See `SECURITY_AND_PRIVACY.md` and `DATABASE.md` for the detailed authentication, authorization, identity-binding, and data-model rules.

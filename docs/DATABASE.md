@@ -136,17 +136,33 @@ The course-change rule is applied when the new course placement is recorded: a s
 
 **### \`admin_users\`**
 
-Authorized COMELEC IT administrators.
+### `admin_users`
+
+Pre-authorized COMELEC IT administrator accounts.
+
+Administrator accounts are established as part of system/operational setup and exist independently of the official Data Center student import. Administrator records are not created, discovered, converted, or deleted through student Data Center imports.
+
+Administrators do not publicly register or create their own administrator accounts.
 
 Key fields:
 
-\- \`google_subject\` — unique personal Google identity.
+* `authorized_email` — pre-authorized personal Google email for this administrator. This authorization exists before first login and is unique among admin records.
+* `google_subject` — nullable before the administrator's first successful Google login; when populated, contains the administrator's stable Google `sub` and is unique.
+* `display_name`.
+* `role = BUKSU_COMELEC_IT_ADMIN`.
 
-\- \`display_name\`.
+Authentication lifecycle:
 
-\- \`role = BUKSU_COMELEC_IT_ADMIN\`.
+1. The administrator record exists before the administrator's first login.
+2. The administrator does not register through the public application.
+3. On first Google login, Google must provide a verified email.
+4. The verified Google email is normalized and matched to the existing `authorized_email`.
+5. If the match succeeds and `google_subject` is still `NULL`, the stable Google `sub` is bound to that existing administrator record.
+6. Subsequent administrator authentication uses the bound stable Google `sub`.
+7. A failed or unauthorized Google login never creates an administrator record.
+8. An existing non-NULL `google_subject` is not replaced by a different Google `sub` merely because an email matches.
 
-Exactly three authorized admins remain an operational/provisioning control rather than a table-cardinality constraint.
+The initial/current roster of three authorized administrators is an operational control. The number three must not be implemented as a permanent database cardinality constraint or permanent application maximum.
 
 **### \`import_batches\`**
 
@@ -954,3 +970,16 @@ Phase 01C includes the approved D3 identifier correction and will verify MySQL i
 - `admin_users.role` CHECK = `BUKSU_COMELEC_IT_ADMIN` (MySQL/MariaDB only). Exactly-three cardinality is enforced at runtime, not by the schema.
 - `users` and `password_reset_tokens` dropped by a forward migration (reversible). `sessions` retained.
 - Cross-table uniqueness of Google `sub` (admin vs student) is not expressible as a constraint without triggers; it is enforced at provisioning, at first-link, and re-checked on every login.
+
+## Phase 02 additions
+
+* `change_requests` (bigint PK): `action_type`, `subject_type/id`, `payload_json`, `status` enum PENDING/APPROVED/REJECTED, `requested_by` and `decided_by` FK `admin_users` (RESTRICT), `decided_at`, `decision_note`. MySQL/MariaDB CHECKs: status set; decided rows carry decider+time and pending rows do not; `decided_by <> requested_by`. SQLite cannot add these (same limitation as existing enum CHECKs); the decision UPDATE also carries the predicates.
+* `notifications`: standard Laravel database-notification table (in-app approval notifications).
+* `access_issue_reports` (Login / Access Reports): `problem_type` (student-chosen; plain string validated against `config('comelec.access_issue_problem_types')`, deliberately not a DB enum), `google_email` (verified institutional email), `reported_student_id` (as typed, unverified), `description`, `denial_reason` (SYSTEM-generated: why authentication denied the login; never student-supplied), `subject_fingerprint` (16-hex keyed hash), timestamps. No token/`sub` columns; no FK to `students`. Login / Access Reports (cannot authenticate) are distinct from the future General Reports (Phase 03, authenticated users), which are not part of Phase 02.
+* Student login treats `students.last_import_batch_id IS NOT NULL` as "loaded by the official Data Center import". Student first-linking is by verified institutional email when `students.google_subject IS NULL`, followed by authentication using the stable Google `sub`.
+* Administrator accounts are pre-authorized independently of the Data Center import. Admin records exist before first login, do not use student import data, and have no public registration path.
+* `admin_users.authorized_email` is the pre-authorized administrator email used for the first-login identity match. `admin_users.google_subject` is nullable before first login and unique when populated.
+* On first admin login, verified Google email is matched to the existing pre-authorized admin record and the stable Google `sub` is atomically bound to that record. An unauthorized Google login never creates an admin.
+* `admin_users.role` CHECK = `BUKSU_COMELEC_IT_ADMIN` (MySQL/MariaDB only). The current three-admin roster is an operational control; it is not a schema-level permanent cardinality limit.
+* `users` and `password_reset_tokens` dropped by a forward migration (reversible). `sessions` retained.
+* Cross-table uniqueness of Google `sub` (admin vs student) is not expressible as a constraint without triggers; it is enforced at admin first-link, student first-link, and every subsequent login.

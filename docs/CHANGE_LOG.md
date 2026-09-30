@@ -58,3 +58,16 @@
 
 ## Change process
 Every material architecture or election-rule change must record date, reason, proposer, affected documents/code, approval authority, migration/testing impact, and resulting decision.
+
+## 2026-09-30 — Phase 02 Administrator Identity Lifecycle Correction
+
+* **Reason:** Documentation correction to align the approved Phase 02 administrator model with the final project decision.
+* Administrator accounts are pre-authorized system records and are independent of the official Data Center student import.
+* Administrators do not publicly register and cannot create their own administrator accounts through Google login.
+* The current initial roster of three administrators is an operational roster, not a permanent database or application cardinality limit.
+* Each administrator has a pre-authorized personal Google email before first login.
+* `admin_users.google_subject` is nullable before first successful login and unique when populated.
+* On first Google login, the verified Google email is matched to the pre-authorized administrator record and the stable Google `sub` is then bound to that existing record.
+* Subsequent administrator authentication uses the bound stable Google `sub`; an existing binding is not replaced by an alternate `sub`.
+* Data Center imports remain authoritative for student master data only and must never create or provision administrator accounts.
+* This entry documents the approved design correction only. Code, migration, and test implementation changes are intentionally deferred to the implementation phase.

@@ -25,11 +25,15 @@ It is built around:
 
 The platform uses a single Google sign-in entry point.
 
-Students authenticate through their institutional Google account.
+Students authenticate through their institutional Google account and are linked to existing student records originating from the official Data Center student-master-data process.
 
-Authorized COMELEC IT administrators authenticate through their authorized personal Google identities.
+Authorized COMELEC IT administrators are separate from student master data. Administrator records are pre-authorized as part of system/operational setup; administrators do not publicly register and are not created by Data Center imports.
+
+Each administrator has a pre-authorized personal Google email before first login. On the first successful Google login, the verified Google email is matched to the existing administrator record and the stable Google `sub` is bound to that record. Before first login, the admin `google_subject` may be `NULL`.
 
 Student and administrator identity domains are separated and independently authorized.
+
+The system does not create student or administrator records merely because a user signs in with Google.
 
 The system does not create student records from Google login.
 

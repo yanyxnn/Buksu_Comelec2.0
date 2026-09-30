@@ -33,7 +33,19 @@ Added: `google_subject` (nullable until first login, unique when set) — see §
 
 **`student_enrollments`** — unchanged: append-only placement history per import.
 
-**`admin_users`** — unchanged: `google_subject` (unique), `display_name`, fixed `role = BUKSU_COMELEC_IT_ADMIN`.
+**`admin_users`** — pre-authorized COMELEC IT administrator records, independent of Data Center student imports.
+
+Key fields:
+
+* `authorized_email` — the administrator's pre-authorized personal Google email; unique among administrator records.
+* `google_subject` — nullable until first successful administrator Google login, unique when set.
+* `display_name`.
+* fixed `role = BUKSU_COMELEC_IT_ADMIN`.
+
+The administrator row exists before first login. Administrators do not publicly register and are not created by Google login or Data Center student import.
+
+The initial/current roster of three administrators is an operational control, not a permanent database or application cardinality limit.
+
 
 **`import_batches`** *(new — closes a gap identified in review)*
 Backs `students.last_import_batch_id` and `student_enrollments.import_batch_id`, which the prior draft referenced without defining.
@@ -372,13 +384,17 @@ Directly addressing review item 9. `import_batches` and `import_batch_rows` (§2
 
 ## 12. Authentication / identity mapping
 
-Directly addressing review item 10.
+Directly addressing review item 10 and the approved Phase 02 authentication decision.
 
-- **Students** authenticate via institutional Google identity. `students.google_subject` (nullable until first login, unique once set) is the link between a Google OAuth login and a `students` row — matched by institutional email domain/verification at login time (the exact matching/provisioning rule, e.g. auto-link-by-institutional-email vs. admin-provisioned, is an implementation detail for Phase 1B, not fixed here).
-- **Admins** authenticate via personal Google identity. `admin_users.google_subject` (unique) is the equivalent link on the admin side.
-- **These are two separate tables with two separate identity columns, never conflated.** A single Google account cannot simultaneously resolve to both a `students` row and an `admin_users` row in the same session context — the authentication layer resolves a session to exactly one identity domain, matching `SECURITY_AND_PRIVACY.md` ("Admin personal Google identities are separate from student institutional Google identities").
-- **The Laravel-scaffolded default `users` table** (present in the current repository skeleton, per `database/migrations/0001_01_01_000000_create_users_table.php`) is **not** used as the authoritative identity table for either students or admins. If Laravel/Livewire internals require a `users`-table-shaped record for framework mechanics, that remains an internal implementation detail decoupled from election identity — it must never become a path by which student and admin identity get merged or by which either identity domain gains an unintended join target. This is flagged as an implementation-phase decision (whether to repurpose, ignore, or remove the scaffolded table) rather than fixed here, since it has no bearing on the domain model itself.
-- The **exactly-three-admins** rule and the **fixed `BUKSU_COMELEC_IT_ADMIN` role** remain, as before, an operational/provisioning control rather than a schema constraint (§17.6, unchanged from the prior draft).
+* **Students** authenticate via institutional Google identity. `students.google_subject` is nullable until first login and unique when set. Before first login, a verified institutional Google email is matched to an existing Data Center-loaded student row whose `google_subject` is `NULL`; the stable Google `sub` is then bound to that row. Subsequent student authentication uses the bound `sub`.
+* **Admins** authenticate via authorized personal Google identity. Administrator records are pre-authorized system records and are independent of the Data Center student import. Administrators do not publicly register.
+* **Admin first-linking** uses the administrator's pre-authorized `authorized_email`. Before first login, `admin_users.google_subject` may be `NULL`. On first login, the verified Google email must match the existing `authorized_email`; only then is the stable Google `sub` bound to that administrator record. A Google login never creates an administrator record.
+* **After first-linking**, administrator authentication uses the bound stable Google `sub`. A different `sub` does not replace an existing binding merely because it presents the same email.
+* **The current three-admin roster is operational, not a permanent schema cardinality rule.** The system must not encode three as a permanent database maximum. Future roster changes remain subject to approved operational procedure.
+* **Students and admins remain separate identity domains.** Their provisioning sources, guards, identity records, and authorization rules must never be conflated.
+* **These are two separate tables with separate identity columns and separate provisioning lifecycles.** A single Google account cannot simultaneously resolve to both domains in the same session context.
+* **The Laravel-scaffolded default `users` table** remains non-authoritative for both student and administrator election identity, as already documented.
+* The fixed `BUKSU_COMELEC_IT_ADMIN` role remains an authorization role, not a mechanism for public registration or self-promotion.
 
 ---
 
