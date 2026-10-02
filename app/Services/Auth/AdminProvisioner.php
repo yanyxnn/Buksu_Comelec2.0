@@ -3,25 +3,28 @@
 namespace App\Services\Auth;
 
 use App\Models\AdminUser;
-use App\Models\Student;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**
- * Operational provisioning of the exactly-three admin identities (invoked only
- * by `php artisan comelec:provision-admins`, never by a web route).
+ * Operational setup of the PRE-AUTHORIZED administrator records (invoked only by
+ * `php artisan comelec:provision-admins`, never by a web route or a login).
  *
- * Idempotent, additive and conservative: it creates missing configured admins,
- * never updates, replaces or deletes an existing one, and refuses to proceed if
- * the database already contains an admin that is not in the configured set.
+ * Each record is identified by the administrator's authorized personal Google email.
+ * `google_subject` is NOT part of provisioning: it stays NULL until the administrator's
+ * first verified Google login binds it (see IdentityResolver).
+ *
+ * Idempotent and conservative: it creates missing configured admins, and never updates,
+ * rebinds, replaces or deletes an existing one. It never reads or writes student data and
+ * is independent of the Data Center import.
  */
 class AdminProvisioner
 {
     public function __construct(private readonly AuditLogger $audit, private readonly AdminRoster $roster) {}
 
     /**
-     * @param  mixed  $configured  expected: list of ['google_subject'=>string,'display_name'=>string] x3
+     * @param  mixed  $configured  expected: list of ['authorized_email'=>string,'display_name'=>string]
      * @return array{created: int, existing: int, display_name_mismatches: int}
      *
      * @throws RuntimeException on any validation failure (nothing is written)
@@ -29,16 +32,18 @@ class AdminProvisioner
     public function provision(mixed $configured): array
     {
         $entries = $this->validated($configured);
-        $subjects = array_column($entries, 'google_subject');
+        $emails = array_column($entries, 'authorized_email');
 
-        if (Student::query()->whereIn('google_subject', $subjects)->exists()) {
-            throw new RuntimeException('A configured admin Google subject is already linked to a student. Refusing to provision.');
-        }
+        return DB::transaction(function () use ($entries, $emails): array {
+            $existing = AdminUser::query()->lockForUpdate()->get();
 
-        return DB::transaction(function () use ($entries, $subjects): array {
-            $existing = AdminUser::query()->lockForUpdate()->get()->keyBy('google_subject');
+            if ($existing->contains(fn (AdminUser $admin) => $admin->authorized_email === null)) {
+                throw new RuntimeException('Existing admin rows without an authorized_email were found. Assign the real authorized email to each one manually first. Refusing to continue.');
+            }
 
-            if ($existing->keys()->diff($subjects)->isNotEmpty()) {
+            $existingByEmail = $existing->keyBy(fn (AdminUser $admin) => mb_strtolower(trim($admin->authorized_email)));
+
+            if ($existingByEmail->keys()->diff($emails)->isNotEmpty()) {
                 throw new RuntimeException('The database already contains an admin that is not in the configured set. Refusing to replace or delete admins.');
             }
 
@@ -46,19 +51,20 @@ class AdminProvisioner
             $mismatches = 0;
 
             foreach ($entries as $entry) {
-                $current = $existing->get($entry['google_subject']);
+                $current = $existingByEmail->get($entry['authorized_email']);
 
                 if ($current !== null) {
                     if ($current->display_name !== $entry['display_name']) {
                         $mismatches++; // reported, never silently overwritten
                     }
 
-                    continue;
+                    continue; // an existing row (and any Google binding it has) is left exactly as it is
                 }
 
                 $admin = new AdminUser;
                 $admin->forceFill([
-                    'google_subject' => $entry['google_subject'],
+                    'authorized_email' => $entry['authorized_email'],
+                    'google_subject' => null,
                     'display_name' => $entry['display_name'],
                     'role' => AdminUser::ROLE,
                 ])->save();
@@ -69,7 +75,7 @@ class AdminProvisioner
                     actorType: 'SYSTEM',
                     targetType: 'admin_user',
                     targetId: $admin->getKey(),
-                    description: 'Admin identity provisioned from deployment configuration.',
+                    description: 'Pre-authorized administrator record provisioned from deployment configuration.',
                     metadata: ['source' => 'comelec:provision-admins'],
                 );
 
@@ -77,7 +83,7 @@ class AdminProvisioner
             }
 
             if (! $this->roster->isIntact()) {
-                throw new RuntimeException('Provisioning would not leave exactly three admins with the fixed role. Rolled back.');
+                throw new RuntimeException('Provisioning would not leave the configured authorized roster intact (size and fixed role). Rolled back.');
             }
 
             return [
@@ -89,29 +95,41 @@ class AdminProvisioner
     }
 
     /**
-     * @return list<array{google_subject: string, display_name: string}>
+     * @return list<array{authorized_email: string, display_name: string}>
      */
     private function validated(mixed $configured): array
     {
-        if (! is_array($configured) || ! array_is_list($configured) || count($configured) !== AdminRoster::REQUIRED_COUNT) {
-            throw new RuntimeException('Exactly '.AdminRoster::REQUIRED_COUNT.' admin identities must be configured (COMELEC_ADMIN_IDENTITIES).');
+        $size = $this->roster->expectedCount();
+
+        if (! is_array($configured) || ! array_is_list($configured) || $size < 1 || count($configured) !== $size) {
+            throw new RuntimeException("The configured admin roster must contain exactly {$size} entries (comelec.admin_roster_size / COMELEC_ADMIN_IDENTITIES).");
         }
 
         $entries = [];
 
         foreach ($configured as $entry) {
-            $sub = is_array($entry) ? ($entry['google_subject'] ?? null) : null;
-            $name = is_array($entry) ? ($entry['display_name'] ?? null) : null;
-
-            if (! is_string($sub) || trim($sub) === '' || ! is_string($name) || trim($name) === '') {
-                throw new RuntimeException('Every admin identity needs a non-empty google_subject and display_name.');
+            if (! is_array($entry) || array_diff(array_keys($entry), ['authorized_email', 'display_name']) !== []) {
+                throw new RuntimeException('Each admin entry may contain only authorized_email and display_name (Google subjects are never configured; they are bound at first login).');
             }
 
-            $entries[] = ['google_subject' => trim($sub), 'display_name' => trim($name)];
+            $email = $entry['authorized_email'] ?? null;
+            $name = $entry['display_name'] ?? null;
+
+            if (! is_string($email) || ! is_string($name) || trim($name) === '') {
+                throw new RuntimeException('Every admin entry needs a non-empty authorized_email and display_name.');
+            }
+
+            $email = mb_strtolower(trim($email));
+
+            if (strlen($email) > 255 || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+                throw new RuntimeException('Every authorized_email must be a valid email address.');
+            }
+
+            $entries[] = ['authorized_email' => $email, 'display_name' => trim($name)];
         }
 
-        if (count(array_unique(array_column($entries, 'google_subject'))) !== AdminRoster::REQUIRED_COUNT) {
-            throw new RuntimeException('The three configured admin Google subjects must be distinct.');
+        if (count(array_unique(array_column($entries, 'authorized_email'))) !== count($entries)) {
+            throw new RuntimeException('The configured authorized emails must be distinct.');
         }
 
         return $entries;

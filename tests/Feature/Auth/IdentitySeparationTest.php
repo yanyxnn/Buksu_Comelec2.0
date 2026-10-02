@@ -2,19 +2,11 @@
 
 use App\Models\AdminUser;
 use App\Models\Student;
-use Illuminate\Database\Connection;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
-function lastDenialReason(): ?string
-{
-    $row = DB::table('audit_logs')->where('event_type', 'auth.denied')->latest('id')->first();
-
-    return $row ? json_decode($row->metadata_json, true)['reason'] : null;
-}
-
-test('a Google account that is both an admin and a student is denied in BOTH domains', function () {
-    $admin = makeAdminRoster()[0];
+test('a Google account that is both a bound admin and a student is denied in BOTH domains', function () {
+    $admin = makeAdminRoster(linked: true)[0];
     $student = Student::factory()->linked($admin->google_subject)->create(); // same subject in both tables
 
     googleLogin(googleIdentity($admin->google_subject, $student->institutional_email))
@@ -24,22 +16,40 @@ test('a Google account that is both an admin and a student is denied in BOTH dom
     $this->assertGuest('admin');
     $this->assertGuest('student');
     expect(lastDenialReason())->toBe('IDENTITY_CONFLICT');
-
-    $row = DB::table('audit_logs')->where('event_type', 'auth.denied')->first();
-    expect($row->severity)->toBe('SECURITY');
+    expect(DB::table('audit_logs')->where('event_type', 'auth.denied')->first()->severity)->toBe('SECURITY');
 });
 
-test('an admin whose email matches a student record is denied and does not link the student', function () {
-    $admin = makeAdminRoster()[0];
+test('a bound admin whose Google email matches a student record is denied and links nobody', function () {
+    $admin = makeAdminRoster(linked: true)[0];
     $student = Student::factory()->create();
 
-    googleLogin(googleIdentity($admin->google_subject, $student->institutional_email))
-        ->assertRedirect(route('access-issue'));
+    googleLogin(googleIdentity($admin->google_subject, $student->institutional_email))->assertRedirect(route('access-issue'));
 
     $this->assertGuest('admin');
     $this->assertGuest('student');
     expect($student->fresh()->google_subject)->toBeNull();
     expect(lastDenialReason())->toBe('IDENTITY_CONFLICT');
+});
+
+test('a pre-authorized admin whose email is also a student institutional email is denied on first login: nothing is bound', function () {
+    $admin = makeAdminRoster()[0];
+    $student = Student::factory()->create(['institutional_email' => $admin->authorized_email]);
+
+    googleLogin(googleIdentity('first-sub', $admin->authorized_email))->assertRedirect(route('access-issue'));
+
+    $this->assertGuest('admin');
+    $this->assertGuest('student');
+    expect($admin->fresh()->google_subject)->toBeNull()->and($student->fresh()->google_subject)->toBeNull();
+    expect(lastDenialReason())->toBe('IDENTITY_CONFLICT');
+});
+
+test('there is no admin-to-student path: a bound admin subject is never a student', function () {
+    $admin = makeAdminRoster(linked: true)[0];
+
+    googleLogin(googleIdentity($admin->google_subject, $admin->authorized_email))->assertRedirect(route('admin.home'));
+
+    $this->assertGuest('student');
+    $this->get(route('student.home'))->assertForbidden();
 });
 
 test('there is no student-to-admin path: a linked student subject is never an admin', function () {
@@ -132,10 +142,11 @@ test('the unique index rejects one subject being linked to two students, and log
     expect(lastDenialReason())->toBe('LINK_FAILED');
 });
 
-test('the database itself refuses two students with the same Google subject and two admins with the same subject', function () {
+test('the database refuses two students with the same Google subject, and two admins with the same subject or the same authorized email', function () {
     Student::factory()->linked('dup-sub')->create();
     expect(fn () => Student::factory()->linked('dup-sub')->create())->toThrow(QueryException::class);
 
-    AdminUser::factory()->create(['google_subject' => 'dup-admin']);
-    expect(fn () => AdminUser::factory()->create(['google_subject' => 'dup-admin']))->toThrow(QueryException::class);
+    AdminUser::factory()->linked('dup-admin')->create(['authorized_email' => 'one@admins.example.test']);
+    expect(fn () => AdminUser::factory()->linked('dup-admin')->create())->toThrow(QueryException::class);
+    expect(fn () => AdminUser::factory()->create(['authorized_email' => 'one@admins.example.test']))->toThrow(QueryException::class);
 });

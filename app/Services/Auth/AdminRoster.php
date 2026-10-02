@@ -5,21 +5,36 @@ namespace App\Services\Auth;
 use App\Models\AdminUser;
 
 /**
- * "Exactly three authorized IT admins" is an operational/provisioning control
- * (DOMAIN_MODEL §12, DATABASE.md) that the schema deliberately does not enforce
- * as a cardinality constraint. It is therefore enforced here, at runtime, on
- * every admin authentication and every admin request: if the roster is not
- * exactly three admins that all carry the fixed role, admin access fails closed.
+ * Current authorized-roster integrity check (an OPERATIONAL policy, not a data-model rule).
+ *
+ * The expected roster size comes from `comelec.admin_roster_size` (currently 3). It is
+ * deliberately not a schema constraint and not an application-wide maximum: the
+ * database allows any number of admin rows, and changing the operational roster is a
+ * configuration change, not a code change.
+ *
+ * On every admin authentication and every admin request the roster must match the
+ * configured size and every row must carry the fixed role; otherwise admin access
+ * fails closed.
  */
 class AdminRoster
 {
-    public const REQUIRED_COUNT = 3;
+    /** The currently configured operational roster size (0 or invalid => no roster is valid). */
+    public function expectedCount(): int
+    {
+        return max(0, (int) config('comelec.admin_roster_size', 3));
+    }
 
     public function isIntact(): bool
     {
+        $expected = $this->expectedCount();
+
+        if ($expected < 1) {
+            return false; // misconfiguration fails closed
+        }
+
         $roles = AdminUser::query()->pluck('role');
 
-        return $roles->count() === self::REQUIRED_COUNT
+        return $roles->count() === $expected
             && $roles->every(fn ($role) => $role === AdminUser::ROLE);
     }
 }

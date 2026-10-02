@@ -17,7 +17,7 @@ use Symfony\Component\HttpFoundation\Response;
  * middleware) every Livewire update request from an admin component.
  *
  * Fails closed: student-only sessions, mixed-identity sessions, a wrong role
- * and a roster that is not exactly three admins are all rejected.
+ * and an authorized roster that fails the current integrity check are all rejected.
  */
 class EnsureAdmin
 {

@@ -9,12 +9,19 @@
 #   1. BEHAVIOUR (enum_guard, one per ENUM column): invalid value -> database rejects it -> row NOT
 #      persisted, under four sql_mode variants; every actual ENUM member is accepted. No error text.
 #   2. STRUCTURE (meta-A/B/C, portable MySQL 8 + MariaDB): every ENUM has a CHECK named
-#      chk_<table>_<column> whose member SET equals the ENUM member SET; nothing else is a CHECK.
+#      chk_<table>_<column> whose member SET equals the ENUM member SET; nothing else is a CHECK, except the
+#      explicitly approved Phase 02 extensions (PHASE2_ENUMS / PHASE2_EXTRA_CHECKS), which are verified
+#      separately so the Phase 01B baseline (23 ENUMs) stays provably intact.
 # Portability rule: metadata is read ONLY from columns present in both engines
 #   (information_schema.COLUMNS; information_schema.CHECK_CONSTRAINTS.CONSTRAINT_SCHEMA /
 #    CONSTRAINT_NAME / CHECK_CLAUSE). CHECK clauses are never compared as raw strings: quoted members
 #   are extracted and compared as unordered sets (MySQL renders _utf8mb4'X', MariaDB renders 'X').
-EXPECTED_ENUM_COUNT=23   # approved target; election_incidents.severity is deliberately NOT an ENUM
+EXPECTED_ENUM_COUNT=23   # approved Phase 01B BASELINE; election_incidents.severity is deliberately NOT an ENUM
+# Approved Phase 02 schema EXTENSIONS: intentional additions made after Phase 01B was completed. They are NOT
+# part of the 23-ENUM baseline and are reported separately (meta-A2/B2/C2); they are never counted as
+# Phase 01B regressions, and nothing outside baseline + this list is tolerated. Each must stay present.
+PHASE2_ENUMS=(change_requests.status)
+PHASE2_EXTRA_CHECKS=(chk_admin_users_role chk_change_requests_decision_state chk_change_requests_no_self_decision)
 DB="${DB:-buksu_comelec2.0}"
 MYSQL="${MYSQL:-mysql -uroot}"
 PASS=0; FAIL=0
@@ -74,7 +81,7 @@ enum_guard() {
 echo "ENGINE: $(q 'SELECT VERSION()') | sql_mode: $(q 'SELECT @@GLOBAL.sql_mode')"
 [ "$(q 'SELECT COUNT(*) FROM elections')" = "0" ] || { echo "Refusing: elections table not empty."; exit 2; }
 T="NOW(),NOW()"
-q "INSERT INTO admin_users(id,google_subject,display_name,created_at,updated_at) VALUES (1,'g1','Admin',$T);
+q "INSERT INTO admin_users(id,authorized_email,google_subject,display_name,created_at,updated_at) VALUES (1,'fixture.admin@example.test','g1','Admin',$T);
 INSERT INTO students(id,institutional_id,institutional_email,first_name,last_name,current_college,current_course,current_year_level,status,created_at,updated_at) VALUES
  (1,'2020-0001','a@x.edu','A','One','CCS','BSIT','1','ACTIVE',$T),(2,'2020-0002','b@x.edu','B','Two','CCS','BSIT','1','ACTIVE',$T),(3,'2020-0003','c@x.edu','C','Three','CCS','BSIT','1','ACTIVE',$T);
 INSERT INTO elections(id,name,type,created_by,created_at,updated_at) VALUES (1,'E1','T',1,$T),(2,'E2','T',1,$T);
@@ -265,46 +272,71 @@ enum_guard ballot_dispositions disposition DELETED \
 echo "=== Domain-value closure: structural layer (portable MySQL 8 / MariaDB) ==="
 # Quoted-member extraction, shared by ENUM and CHECK sides: prints the sorted unique quoted members.
 members() { grep -o "'[^']*'" | tr -d "'" | LC_ALL=C sort -u; }
-inv=$(q "SELECT CONCAT(TABLE_NAME,'.',COLUMN_NAME) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$DB' AND DATA_TYPE='enum'" | LC_ALL=C sort)
-ninv=$(printf '%s' "$inv" | grep -c .)
+inv_all=$(q "SELECT CONCAT(TABLE_NAME,'.',COLUMN_NAME) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$DB' AND DATA_TYPE='enum'" | LC_ALL=C sort)
+p2e=$(printf '%s\n' "${PHASE2_ENUMS[@]}" | LC_ALL=C sort)
+inv=$(comm -23 <(echo "$inv_all") <(echo "$p2e"))      # ENUM columns that are NOT approved Phase 02 extensions = Phase 01B baseline set
+inv_p2=$(comm -12 <(echo "$inv_all") <(echo "$p2e"))   # approved Phase 02 ENUM extensions actually present
+ninv=$(printf '%s' "$inv" | grep -c .); nP2=$(printf '%s' "$inv_p2" | grep -c .)
 
-# meta-A: ENUM inventory (vendor-neutral discovery) == guarded set, and == the approved count.
+# meta-A (Phase 01B BASELINE): ENUM inventory (vendor-neutral discovery) == guarded set, and == the approved count.
 grd=$(printf '%s\n' "${GUARDED[@]}" | LC_ALL=C sort)
 unguarded=$(comm -23 <(echo "$inv") <(echo "$grd") | tr '\n' ' '); stale=$(comm -13 <(echo "$inv") <(echo "$grd") | tr '\n' ' ')
 if [ "$ninv" -eq "$EXPECTED_ENUM_COUNT" ] && [ -z "$unguarded" ] && [ -z "$stale" ]; then
-  echo "PASS  meta-A: ENUM inventory == guarded set == approved count ($ninv columns)"; PASS=$((PASS+1))
-else echo "FAIL  meta-A: ENUM inventory != guarded set / approved count. found=$ninv expected=$EXPECTED_ENUM_COUNT unguarded: [${unguarded:-none}] stale: [${stale:-none}]"; FAIL=$((FAIL+1)); fi
+  echo "PASS  meta-A  [Phase 01B baseline]: ENUM inventory == guarded set == approved count ($ninv/$EXPECTED_ENUM_COUNT columns)"; PASS=$((PASS+1))
+else echo "FAIL  meta-A  [Phase 01B baseline]: ENUM inventory != guarded set / approved count. found=$ninv expected=$EXPECTED_ENUM_COUNT unguarded (unapproved ENUM): [${unguarded:-none}] stale: [${stale:-none}]"; FAIL=$((FAIL+1)); fi
 
-# meta-B: for EVERY ENUM column, the constraint named chk_<table>_<column> (located by schema + name)
+# meta-A2 (approved Phase 02 extensions): every approved extension ENUM is present (cannot be silently dropped).
+missP2e=$(comm -13 <(echo "$inv_all") <(echo "$p2e") | tr '\n' ' ')
+if [ -z "$missP2e" ] && [ "$nP2" -eq "${#PHASE2_ENUMS[@]}" ]; then
+  echo "PASS  meta-A2 [Phase 02 extension]: approved ENUM extension(s) present and recognised as intentional additions ($nP2: $(printf '%s ' $inv_p2)) - not counted against the 23-ENUM baseline"; PASS=$((PASS+1))
+else echo "FAIL  meta-A2 [Phase 02 extension]: approved ENUM extension missing: [${missP2e:-none}]"; FAIL=$((FAIL+1)); fi
+
+# meta-B / meta-B2: for EVERY ENUM column, the constraint named chk_<table>_<column> (located by schema + name)
 # exists exactly once, references the column, and its member SET equals the ENUM member SET.
-bad=""
-while IFS= read -r ref; do
-  [ -n "$ref" ] || continue
-  t="${ref%%.*}"; c="${ref#*.}"
-  em=$(q "SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$DB' AND TABLE_NAME='$t' AND COLUMN_NAME='$c'" | members)
-  # Backslashes are stripped server-side (portable SQL): MySQL 8 stores the clause with escaped quotes
-  # (_utf8mb4\'X\'), MariaDB with plain quotes ('X'). Safe only because members are [A-Za-z0-9_] (checked).
-  rows=$(q "SELECT REPLACE(CHECK_CLAUSE, CHAR(92), '') FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA='$DB' AND CONSTRAINT_NAME='chk_${t}_${c}'")
-  if printf '%s\n' "$em" | grep -qvE '^[A-Za-z0-9_]+$'; then bad="$bad [$ref: ENUM member outside [A-Za-z0-9_] (or empty); extractor must be extended before this comparison is trustworthy]"; continue; fi
-  nrows=$(printf '%s' "$rows" | grep -c .)
-  if [ "$nrows" -ne 1 ]; then bad="$bad [$ref: expected exactly 1 constraint chk_${t}_${c}, found $nrows]"; continue; fi
-  printf '%s' "$rows" | grep -qF "\`$c\`" || { bad="$bad [$ref: chk_${t}_${c} does not reference column $c]"; continue; }
-  cm=$(printf '%s' "$rows" | members)
-  if [ -z "$em" ] || [ "$em" != "$cm" ]; then
-    extra=$(comm -13 <(echo "$em") <(echo "$cm") | tr '\n' ','); miss=$(comm -23 <(echo "$em") <(echo "$cm") | tr '\n' ',')
-    bad="$bad [$ref: CHECK members != ENUM members; extra-in-CHECK={${extra}} missing-from-CHECK={${miss}}]"
-  fi
-done <<< "$inv"
-if [ -z "$bad" ] && [ "$ninv" -gt 0 ]; then echo "PASS  meta-B: ENUM member set == CHECK member set for all $ninv ENUM columns (unordered, quoted-member extraction)"; PASS=$((PASS+1))
-else echo "FAIL  meta-B: ENUM vs CHECK member sets ->${bad:- [empty ENUM inventory]}"; FAIL=$((FAIL+1)); fi
+enum_check_problems() { # $1 = newline list of table.column refs; prints the problems found (empty when none)
+  local bad="" ref t c em rows nrows cm extra miss
+  while IFS= read -r ref; do
+    [ -n "$ref" ] || continue
+    t="${ref%%.*}"; c="${ref#*.}"
+    em=$(q "SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$DB' AND TABLE_NAME='$t' AND COLUMN_NAME='$c'" | members)
+    # Backslashes are stripped server-side (portable SQL): MySQL 8 stores the clause with escaped quotes
+    # (_utf8mb4\'X\'), MariaDB with plain quotes ('X'). Safe only because members are [A-Za-z0-9_] (checked).
+    rows=$(q "SELECT REPLACE(CHECK_CLAUSE, CHAR(92), '') FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA='$DB' AND CONSTRAINT_NAME='chk_${t}_${c}'")
+    if printf '%s\n' "$em" | grep -qvE '^[A-Za-z0-9_]+$'; then bad="$bad [$ref: ENUM member outside [A-Za-z0-9_] (or empty); extractor must be extended before this comparison is trustworthy]"; continue; fi
+    nrows=$(printf '%s' "$rows" | grep -c .)
+    if [ "$nrows" -ne 1 ]; then bad="$bad [$ref: expected exactly 1 constraint chk_${t}_${c}, found $nrows]"; continue; fi
+    printf '%s' "$rows" | grep -qF "\`$c\`" || { bad="$bad [$ref: chk_${t}_${c} does not reference column $c]"; continue; }
+    cm=$(printf '%s' "$rows" | members)
+    if [ -z "$em" ] || [ "$em" != "$cm" ]; then
+      extra=$(comm -13 <(echo "$em") <(echo "$cm") | tr '\n' ','); miss=$(comm -23 <(echo "$em") <(echo "$cm") | tr '\n' ',')
+      bad="$bad [$ref: CHECK members != ENUM members; extra-in-CHECK={${extra}} missing-from-CHECK={${miss}}]"
+    fi
+  done <<< "$1"
+  printf '%s' "$bad"
+}
+bad=$(enum_check_problems "$inv")
+if [ -z "$bad" ] && [ "$ninv" -gt 0 ]; then echo "PASS  meta-B  [Phase 01B baseline]: ENUM member set == CHECK member set for all $ninv baseline ENUM columns (unordered, quoted-member extraction)"; PASS=$((PASS+1))
+else echo "FAIL  meta-B  [Phase 01B baseline]: ENUM vs CHECK member sets ->${bad:- [empty ENUM inventory]}"; FAIL=$((FAIL+1)); fi
+badP2=$(enum_check_problems "$inv_p2")
+if [ -z "$badP2" ] && [ "$nP2" -gt 0 ]; then echo "PASS  meta-B2 [Phase 02 extension]: ENUM member set == CHECK member set for the $nP2 approved Phase 02 ENUM extension(s)"; PASS=$((PASS+1))
+else echo "FAIL  meta-B2 [Phase 02 extension]: ENUM vs CHECK member sets ->${badP2:- [no approved extension found]}"; FAIL=$((FAIL+1)); fi
 
-# meta-C: the CHECK inventory is exactly {chk_<table>_<column> for each ENUM column}: nothing missing,
-# nothing extra anywhere (JSON-validity checks that MariaDB synthesises for JSON columns are excluded).
+# meta-C (Phase 01B BASELINE): the CHECK inventory contains {chk_<table>_<column> for each baseline ENUM column}:
+# none missing, and NO CHECK anywhere that is neither baseline nor an approved Phase 02 extension
+# (JSON-validity checks that MariaDB synthesises for JSON columns are excluded).
 want=$(while IFS= read -r ref; do [ -n "$ref" ] && echo "chk_${ref%%.*}_${ref#*.}"; done <<< "$inv" | LC_ALL=C sort)
+want_p2=$( { while IFS= read -r ref; do [ -n "$ref" ] && echo "chk_${ref%%.*}_${ref#*.}"; done <<< "$inv_p2"; printf '%s\n' "${PHASE2_EXTRA_CHECKS[@]}"; } | LC_ALL=C sort -u)
+approved=$( { echo "$want"; echo "$want_p2"; } | grep . | LC_ALL=C sort -u)
 have=$(q "SELECT CONSTRAINT_NAME FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA='$DB' AND LOWER(CHECK_CLAUSE) NOT LIKE '%json_valid(%'" | LC_ALL=C sort)
-missing=$(comm -23 <(echo "$want") <(echo "$have") | tr '\n' ' '); unexpected=$(comm -13 <(echo "$want") <(echo "$have") | tr '\n' ' ')
-if [ -z "$missing" ] && [ -z "$unexpected" ] && [ "$ninv" -gt 0 ]; then echo "PASS  meta-C: CHECK inventory == {chk_<table>_<column>} for the $ninv ENUM columns; no extra CHECK anywhere"; PASS=$((PASS+1))
-else echo "FAIL  meta-C: CHECK inventory mismatch. missing: [${missing:-none}] unexpected: [${unexpected:-none}]"; FAIL=$((FAIL+1)); fi
+missing=$(comm -23 <(echo "$want") <(echo "$have") | tr '\n' ' '); unexpected=$(comm -13 <(echo "$approved") <(echo "$have") | tr '\n' ' ')
+if [ -z "$missing" ] && [ -z "$unexpected" ] && [ "$ninv" -gt 0 ]; then echo "PASS  meta-C  [Phase 01B baseline]: CHECK inventory == {chk_<table>_<column>} for the $ninv baseline ENUM columns (none missing); no unapproved CHECK anywhere"; PASS=$((PASS+1))
+else echo "FAIL  meta-C  [Phase 01B baseline]: CHECK inventory mismatch. missing baseline CHECK: [${missing:-none}] unapproved CHECK (neither baseline nor approved Phase 02): [${unexpected:-none}]"; FAIL=$((FAIL+1)); fi
+
+# meta-C2 (approved Phase 02 extensions): every approved Phase 02 CHECK is present: they must not be weakened or dropped.
+nwp2=$(printf '%s' "$want_p2" | grep -c .)
+missP2c=$(comm -23 <(echo "$want_p2") <(echo "$have") | tr '\n' ' ')
+if [ -z "$missP2c" ]; then echo "PASS  meta-C2 [Phase 02 extension]: all $nwp2 approved Phase 02 CHECK constraints present ($(printf '%s ' $want_p2)) - recognised as intentional additions, not Phase 01B regressions"; PASS=$((PASS+1))
+else echo "FAIL  meta-C2 [Phase 02 extension]: approved Phase 02 CHECK constraint(s) missing/dropped: [$missP2c]"; FAIL=$((FAIL+1)); fi
 
 echo "=== election_incidents.severity: free-form nullable VARCHAR(255), no default, no CHECK ==="
 sev=$(q "SELECT LOWER(COLUMN_TYPE),IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$DB' AND TABLE_NAME='election_incidents' AND COLUMN_NAME='severity'" | tr '\t' ' ')
@@ -346,4 +378,5 @@ empty "no voter-identity column in Domain B tables" "SELECT TABLE_NAME,COLUMN_NA
 empty "no FK from Domain A tables to Domain B tables, or the reverse" "SELECT TABLE_NAME,REFERENCED_TABLE_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA='$DB' AND REFERENCED_TABLE_NAME IS NOT NULL AND ((TABLE_NAME IN ('voter_participations','submission_attempts') AND REFERENCED_TABLE_NAME LIKE 'ballot%') OR (TABLE_NAME LIKE 'ballot%' AND REFERENCED_TABLE_NAME IN ('students','voter_participations','submission_attempts','election_eligible_voters')))"
 
 q "SET FOREIGN_KEY_CHECKS=0; TRUNCATE result_snapshots; TRUNCATE result_aggregates; TRUNCATE result_calculation_runs; TRUNCATE ballot_reporting_contexts; TRUNCATE ballot_candidate_selections; TRUNCATE ballot_contest_responses; TRUNCATE ballots; TRUNCATE voter_participations; TRUNCATE submission_attempts; TRUNCATE ballot_structure_snapshots; TRUNCATE candidacies; TRUNCATE candidate_roster_snapshots; TRUNCATE election_eligibility_snapshots; TRUNCATE candidates; TRUNCATE contests; TRUNCATE parties; TRUNCATE representation_groups; TRUNCATE election_config_versions; TRUNCATE elections; TRUNCATE student_enrollments; TRUNCATE import_batches; TRUNCATE students; TRUNCATE admin_users; SET FOREIGN_KEY_CHECKS=1;" >/dev/null
-echo; echo "RESULT: $PASS passed, $FAIL failed"; [ "$FAIL" -eq 0 ]
+echo; echo "SUMMARY  Phase 01B baseline: $ninv/$EXPECTED_ENUM_COUNT ENUM columns guarded by CHECKs (meta-A/B/C).  Approved Phase 02 extensions: $nP2 ENUM + $nwp2 CHECK recognised separately (meta-A2/B2/C2)."
+echo "RESULT: $PASS passed, $FAIL failed"; [ "$FAIL" -eq 0 ]

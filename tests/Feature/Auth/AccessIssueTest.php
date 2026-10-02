@@ -80,7 +80,7 @@ test('the problem types are the agreed initial list, config-backed with human-re
 });
 
 test('the message block is identical for admin conflicts, unknown, non-institutional and unverified accounts (nothing is revealed)', function () {
-    $admin = makeAdminRoster()[0];
+    $admin = makeAdminRoster(linked: true)[0];
     $conflict = Student::factory()->linked($admin->google_subject)->create();
 
     $messages = [];

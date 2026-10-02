@@ -18,6 +18,7 @@ enum DenialReason: string
     case NotDataCenterLoaded = 'NOT_DATA_CENTER_LOADED';
     case AmbiguousEmail = 'AMBIGUOUS_EMAIL';
     case EmailBoundToOtherSubject = 'EMAIL_BOUND_TO_OTHER_SUBJECT';
+    case AdminEmailBoundToOtherSubject = 'ADMIN_EMAIL_BOUND_TO_OTHER_SUBJECT';
     case IdentityMismatch = 'IDENTITY_MISMATCH';
     case IdentityConflict = 'IDENTITY_CONFLICT';
     case RosterInvalid = 'ADMIN_ROSTER_INVALID';
@@ -27,7 +28,7 @@ enum DenialReason: string
     public function severity(): string
     {
         return match ($this) {
-            self::IdentityConflict, self::RosterInvalid, self::IdentityMismatch, self::EmailBoundToOtherSubject => AuditLogger::SECURITY,
+            self::IdentityConflict, self::RosterInvalid, self::IdentityMismatch, self::EmailBoundToOtherSubject, self::AdminEmailBoundToOtherSubject => AuditLogger::SECURITY,
             default => AuditLogger::WARNING,
         };
     }

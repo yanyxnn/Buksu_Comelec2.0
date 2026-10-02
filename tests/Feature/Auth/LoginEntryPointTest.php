@@ -46,7 +46,7 @@ test('after Google authentication one login resolves into exactly one of admin, 
     $admin = makeAdminRoster()[0];
     $student = Student::factory()->create();
 
-    googleLogin(googleIdentity($admin->google_subject, 'a@gmail.com'))->assertRedirect(route('admin.home'));
+    googleLogin(adminGoogleIdentity($admin))->assertRedirect(route('admin.home'));
     googleLogin(googleIdentity('s1', $student->institutional_email))->assertRedirect(route('student.home'));
     googleLogin(googleIdentity('s2', 'ghost@'.studentDomain()))->assertRedirect(route('access-issue'));
 });
