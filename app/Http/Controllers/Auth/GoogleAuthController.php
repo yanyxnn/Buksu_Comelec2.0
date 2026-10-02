@@ -64,7 +64,16 @@ class GoogleAuthController extends Controller
 
         // Audit first: if the trail cannot be written, nobody gets in.
         if ($decision->firstLink) {
-            $audit->record('auth.student.first_link', AuditLogger::INFO, 'STUDENT', $model->getKey(), 'student', $model->getKey(), 'Student Google identity linked on first login.', correlationId: $correlationId);
+            $audit->record(
+                $isAdmin ? 'auth.admin.first_link' : 'auth.student.first_link',
+                AuditLogger::INFO,
+                $actorType,
+                $model->getKey(),
+                $isAdmin ? 'admin_user' : 'student',
+                $model->getKey(),
+                $isAdmin ? 'Administrator Google identity bound on first login.' : 'Student Google identity linked on first login.',
+                correlationId: $correlationId,
+            );
         }
 
         $audit->record($isAdmin ? 'auth.admin.login' : 'auth.student.login', AuditLogger::INFO, $actorType, $model->getKey(), description: 'Successful Google login.', correlationId: $correlationId);

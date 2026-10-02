@@ -17,12 +17,23 @@ return [
     'student_email_domain' => env('COMELEC_STUDENT_EMAIL_DOMAIN'),
 
     /*
-     * The exactly-three IT admin Google identities, provisioned OUTSIDE the
-     * application UI via `php artisan comelec:provision-admins`.
+     * The current operational size of the authorized COMELEC IT administrator roster.
+     * This is an OPERATIONAL control, not a schema limit or a permanent maximum: the
+     * database allows any number of admin rows, and admin access is granted only while
+     * the roster matches this value (see App\Services\Auth\AdminRoster).
+     */
+    'admin_roster_size' => 3,
+
+    /*
+     * The pre-authorized administrator records, provisioned OUTSIDE the application UI
+     * via `php artisan comelec:provision-admins`. Administrators are never created by
+     * Google login or by Data Center imports.
      *
-     * JSON array of exactly three objects:
-     *   [{"google_subject":"…","display_name":"…"}, … ]
-     * `google_subject` is Google's stable `sub` claim, not an email address.
+     * JSON array with `admin_roster_size` objects:
+     *   [{"authorized_email":"…","display_name":"…"}, … ]
+     * `authorized_email` is the administrator's pre-authorized personal Google email.
+     * Google's stable `sub` is NOT configured here: it is bound to the record at the
+     * administrator's first verified Google login.
      * Personal identifiers: keep this in the deployment environment only.
      */
     'admin_identities' => json_decode((string) env('COMELEC_ADMIN_IDENTITIES', '[]'), true) ?: [],

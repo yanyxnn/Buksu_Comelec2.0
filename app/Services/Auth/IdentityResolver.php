@@ -14,8 +14,10 @@ use RuntimeException;
  * anything from Google into student data, and never lets an account that
  * touches both domains authenticate as either.
  *
- * Google's stable `sub` is the identity. Email is used only for the one-time
- * first-link of a student.
+ * Google's stable `sub` is the identity once bound. Email is used only for the
+ * one-time first-link: of a student (verified institutional email + existing Data
+ * Center-loaded row) or of a PRE-AUTHORIZED administrator (verified email matching
+ * `admin_users.authorized_email`). Login never creates either kind of account.
  */
 class IdentityResolver
 {
@@ -34,7 +36,7 @@ class IdentityResolver
             return AuthDecision::denied(DenialReason::EmailNotVerified);
         }
 
-        $admin = AdminUser::query()->where('google_subject', $sub)->first();
+        $adminBySub = AdminUser::query()->where('google_subject', $sub)->first();
         $studentBySub = Student::query()->where('google_subject', $sub)->first();
         $studentsByEmail = Student::query()
             ->whereRaw('LOWER(institutional_email) = ?', [$email])
@@ -42,19 +44,91 @@ class IdentityResolver
             ->get();
 
         // One Google account must never resolve to both domains.
-        if ($admin !== null && ($studentBySub !== null || $studentsByEmail->isNotEmpty())) {
-            return AuthDecision::denied(DenialReason::IdentityConflict);
-        }
+        $touchesStudentDomain = $studentBySub !== null || $studentsByEmail->isNotEmpty();
 
-        if ($admin !== null) {
-            if ($admin->role !== AdminUser::ROLE || ! $this->roster->isIntact()) {
-                return AuthDecision::denied(DenialReason::RosterInvalid);
+        // Repeat admin login: the bound subject is authoritative; email is never used to rebind.
+        if ($adminBySub !== null) {
+            if ($touchesStudentDomain) {
+                return AuthDecision::denied(DenialReason::IdentityConflict);
             }
 
-            return AuthDecision::admin($admin);
+            return $this->admittedAdmin($adminBySub);
         }
 
+        // No admin is bound to this subject: is the verified email a PRE-AUTHORIZED administrator?
+        $adminsByEmail = AdminUser::query()
+            ->whereRaw('LOWER(authorized_email) = ?', [$email])
+            ->limit(2)
+            ->get();
+
+        if ($adminsByEmail->count() > 1) {
+            return AuthDecision::denied(DenialReason::AmbiguousEmail);
+        }
+
+        if (($adminByEmail = $adminsByEmail->first()) !== null) {
+            $bound = $adminByEmail->google_subject;
+
+            // Authorized email already bound to a DIFFERENT subject: never replace the binding.
+            if ($bound !== null && $bound !== $sub) {
+                return AuthDecision::denied(DenialReason::AdminEmailBoundToOtherSubject);
+            }
+
+            if ($touchesStudentDomain) {
+                return AuthDecision::denied(DenialReason::IdentityConflict);
+            }
+
+            $admitted = $this->admittedAdmin($adminByEmail);
+
+            // $bound === $sub: a twin request from this same Google account bound it a moment ago.
+            return ($bound !== null || $admitted->isDenied()) ? $admitted : $this->firstLinkAdmin($adminByEmail, $sub, $email);
+        }
+
+        // Not an administrator (and never created as one): fall through to the student domain.
         return $this->resolveStudent($sub, $email, $studentBySub, $studentsByEmail->all());
+    }
+
+    /** Role and current authorized-roster integrity must hold before an admin is admitted. */
+    private function admittedAdmin(AdminUser $admin): AuthDecision
+    {
+        if ($admin->role !== AdminUser::ROLE || ! $this->roster->isIntact()) {
+            return AuthDecision::denied(DenialReason::RosterInvalid);
+        }
+
+        return AuthDecision::admin($admin);
+    }
+
+    /**
+     * Atomic first-link of a pre-authorized administrator: sets google_subject only while it
+     * is still NULL (and the row still carries the matching authorized email), re-checks the
+     * student table inside the transaction, and relies on the UNIQUE index on google_subject.
+     * A competing first-link can never overwrite the winner.
+     */
+    private function firstLinkAdmin(AdminUser $admin, string $sub, string $email): AuthDecision
+    {
+        try {
+            $linked = DB::transaction(function () use ($admin, $sub, $email): AdminUser {
+                $affected = AdminUser::query()
+                    ->whereKey($admin->getKey())
+                    ->whereNull('google_subject')
+                    ->whereRaw('LOWER(authorized_email) = ?', [$email])
+                    ->update(['google_subject' => $sub]);
+
+                if ($affected !== 1) {
+                    throw new RuntimeException('First-link rejected.');
+                }
+
+                if (Student::query()->where('google_subject', $sub)->exists()) {
+                    throw new RuntimeException('First-link rejected.');
+                }
+
+                return $admin->refresh();
+            });
+        } catch (QueryException|RuntimeException) {
+            // Lost the race (another identity bound it first) or the cross-table re-check failed.
+            return AuthDecision::denied(DenialReason::LinkFailed);
+        }
+
+        return AuthDecision::admin($linked, firstLink: true);
     }
 
     /**

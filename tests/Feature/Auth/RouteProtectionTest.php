@@ -32,7 +32,7 @@ test('an admin gets 403 on the student area', function () {
     $this->actingAs($admin, 'admin')->get(route('student.home'))->assertForbidden();
 });
 
-test('an admin is denied and logged out when the roster is not exactly three', function () {
+test('an admin is denied and logged out when the authorized roster is not intact', function () {
     $admins = makeAdminRoster();
     $this->actingAs($admins[0], 'admin');
     $admins[2]->delete();

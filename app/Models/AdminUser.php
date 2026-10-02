@@ -9,11 +9,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Notifiable;
 
 /**
- * One of the exactly three authorized COMELEC IT admins.
+ * A pre-authorized COMELEC IT administrator record.
  *
- * Provisioned outside the application (comelec:provision-admins). There is no
- * UI or mass-assignable path that can create, promote, demote or delete an
- * admin: `google_subject` and `role` are not fillable.
+ * Provisioned outside the application (comelec:provision-admins) with an
+ * `authorized_email`; `google_subject` stays NULL until the first verified Google
+ * login binds it. There is no UI or mass-assignable path that can create, promote,
+ * demote or delete an admin: `authorized_email`, `google_subject` and `role` are
+ * not fillable.
  */
 class AdminUser extends Model implements AuthenticatableContract
 {

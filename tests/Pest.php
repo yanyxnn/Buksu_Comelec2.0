@@ -61,14 +61,29 @@ function something()
 */
 
 /**
- * The exactly-three admin roster. Tops up to three, reusing an admin that already exists
- * (e.g. the uploader of the shared Data Center import batch). @return Collection<int, AdminUser>
+ * The current operational admin roster (comelec.admin_roster_size, default 3).
+ * Tops up to that size, reusing any admin that already exists (e.g. the uploader of the
+ * shared Data Center import batch). By default the admins are PRE-AUTHORIZED and not yet
+ * linked (google_subject NULL); pass $linked = true for admins that already completed
+ * first login. @return Collection<int, AdminUser>
  */
-function makeAdminRoster(): Collection
+function makeAdminRoster(bool $linked = false): Collection
 {
-    AdminUser::factory()->count(max(0, 3 - AdminUser::count()))->create();
+    $missing = max(0, (int) config('comelec.admin_roster_size') - AdminUser::count());
+    AdminUser::factory()->count($missing)->create();
+
+    if ($linked) {
+        AdminUser::query()->whereNull('google_subject')->get()
+            ->each(fn (AdminUser $admin) => $admin->forceFill(['google_subject' => 'admin-sub-'.$admin->id])->save());
+    }
 
     return AdminUser::query()->orderBy('id')->get()->values();
+}
+
+/** Google identity for an administrator: first login by authorized email, or repeat login by bound subject. */
+function adminGoogleIdentity(AdminUser $admin, ?string $sub = null, bool $verified = true): GoogleIdentity
+{
+    return new GoogleIdentity($sub ?? $admin->google_subject ?? 'sub-of-admin-'.$admin->id, $admin->authorized_email, $verified);
 }
 
 function googleIdentity(string $sub, string $email, bool $verified = true): GoogleIdentity
@@ -129,4 +144,12 @@ function failOnInsertInto(string $table): void
 function isUpdateOf(string $query, string $table): bool
 {
     return (bool) preg_match('/^update\s+[`"]?'.preg_quote($table, '/').'[`"]?\s/i', $query);
+}
+
+/** The internal (audit-only) reason of the most recent denied login. */
+function lastDenialReason(): ?string
+{
+    $row = Illuminate\Support\Facades\DB::table('audit_logs')->where('event_type', 'auth.denied')->latest('id')->first();
+
+    return $row ? json_decode($row->metadata_json, true)['reason'] : null;
 }

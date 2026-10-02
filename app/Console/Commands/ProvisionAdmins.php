@@ -10,7 +10,7 @@ class ProvisionAdmins extends Command
 {
     protected $signature = 'comelec:provision-admins';
 
-    protected $description = 'Provision the exactly-three COMELEC IT admin identities from COMELEC_ADMIN_IDENTITIES (idempotent, additive only).';
+    protected $description = 'Provision the pre-authorized COMELEC IT administrator records (authorized email, no Google subject) from COMELEC_ADMIN_IDENTITIES. Idempotent and additive only.';
 
     public function handle(AdminProvisioner $provisioner): int
     {
@@ -22,7 +22,7 @@ class ProvisionAdmins extends Command
             return self::FAILURE;
         }
 
-        $this->info("Admin roster OK: {$result['created']} created, {$result['existing']} already present.");
+        $this->info("Authorized admin roster OK: {$result['created']} created, {$result['existing']} already present.");
 
         if ($result['display_name_mismatches'] > 0) {
             $this->warn("{$result['display_name_mismatches']} existing admin(s) have a different display name than configured; NOT changed.");
