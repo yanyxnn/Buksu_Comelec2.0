@@ -59,7 +59,7 @@ test('students cannot create or decide requests (policy)', function () {
         ->and(Gate::forUser($student)->denies('viewAny', ChangeRequest::class))->toBeTrue();
 });
 
-test('creation and decisions are refused unless the roster is exactly three admins', function () {
+test('creation and decisions are refused unless the authorized roster is intact', function () {
     $request = $this->service->create($this->a, 'TEST_ONLY_ACTION');
     $this->c->delete();
 
@@ -162,7 +162,7 @@ test('the atomic decision statement itself can never let a requester decide (que
     expect($affected)->toBe(0)->and($request->fresh()->status)->toBe('PENDING');
 });
 
-test('creating a request notifies ALL THREE admins in-app', function () {
+test('creating a request notifies EVERY admin on the roster in-app', function () {
     $request = $this->service->create($this->a, 'TEST_ONLY_ACTION');
 
     $rows = DB::table('notifications')->get();
@@ -223,7 +223,7 @@ test('every step is audited with actor, target and no sensitive data', function 
 
     $dump = DB::table('audit_logs')->get()->toJson();
     foreach ([$this->a, $this->b, $this->c] as $admin) {
-        expect($dump)->not->toContain($admin->google_subject);
+        expect($dump)->not->toContain($admin->authorized_email);
     }
     expect($dump)->not->toContain('harmless'); // payload contents are not copied into the audit trail
 });

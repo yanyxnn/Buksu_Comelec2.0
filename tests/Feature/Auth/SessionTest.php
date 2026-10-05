@@ -56,7 +56,7 @@ test('admin logout ends the admin session and is audited', function () {
 
 test('after logout the protected areas require login again', function () {
     $admin = makeAdminRoster()[0];
-    googleLogin(googleIdentity($admin->google_subject, 'a@gmail.com'));
+    googleLogin(adminGoogleIdentity($admin));
     $this->get(route('admin.home'))->assertOk();
 
     $this->post(route('logout'));
@@ -69,7 +69,7 @@ test('a successful Google login as a student REPLACES an existing admin session'
     $admin = makeAdminRoster()[0];
     $student = Student::factory()->create();
 
-    googleLogin(googleIdentity($admin->google_subject, 'a@gmail.com'))->assertRedirect(route('admin.home'));
+    googleLogin(adminGoogleIdentity($admin))->assertRedirect(route('admin.home'));
     $adminSessionId = session()->getId();
 
     googleLogin(googleIdentity('sub-s', $student->institutional_email))->assertRedirect(route('student.home'));
@@ -85,7 +85,7 @@ test('a successful Google login as an admin REPLACES an existing student session
     $student = Student::factory()->create();
 
     googleLogin(googleIdentity('sub-s', $student->institutional_email))->assertRedirect(route('student.home'));
-    googleLogin(googleIdentity($admin->google_subject, 'a@gmail.com'))->assertRedirect(route('admin.home'));
+    googleLogin(adminGoogleIdentity($admin))->assertRedirect(route('admin.home'));
     Auth::forgetGuards();
 
     $this->assertAuthenticatedAs($admin, 'admin');
@@ -95,7 +95,7 @@ test('a successful Google login as an admin REPLACES an existing student session
 test('a DENIED second login does not disturb the identity already in the session', function () {
     $admin = makeAdminRoster()[0];
 
-    googleLogin(googleIdentity($admin->google_subject, 'a@gmail.com'));
+    googleLogin(adminGoogleIdentity($admin));
     googleLogin(googleIdentity('stranger', 'nobody@'.studentDomain()))->assertRedirect(route('access-issue'));
     Auth::forgetGuards();
 
@@ -106,7 +106,7 @@ test('logging in as a student after an admin logout leaves no admin identity beh
     $admin = makeAdminRoster()[0];
     $student = Student::factory()->create();
 
-    googleLogin(googleIdentity($admin->google_subject, 'a@gmail.com'));
+    googleLogin(adminGoogleIdentity($admin));
     $this->post(route('logout'));
     Auth::forgetGuards();
 

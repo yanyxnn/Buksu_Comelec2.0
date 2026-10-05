@@ -15,9 +15,9 @@ final class AuthDecision
         public readonly bool $firstLink = false,
     ) {}
 
-    public static function admin(AdminUser $admin): self
+    public static function admin(AdminUser $admin, bool $firstLink = false): self
     {
-        return new self($admin, null, null);
+        return new self($admin, null, null, $firstLink);
     }
 
     public static function student(Student $student, bool $firstLink = false): self

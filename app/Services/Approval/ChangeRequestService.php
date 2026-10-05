@@ -23,7 +23,7 @@ use InvalidArgumentException;
  *    MySQL/MariaDB);
  *  - PENDING -> APPROVED|REJECTED is one atomic conditional UPDATE, so of two
  *    racing decisions exactly one wins;
- *  - all three admins are notified in the SAME transaction as the request;
+ *  - every admin on the authorized roster is notified in the SAME transaction as the request;
  *  - creation and every decision are audited in the same transaction.
  *
  * No real election action types and no multi-approval thresholds are defined
@@ -66,7 +66,7 @@ class ChangeRequestService
                 'requested_by' => $requester->getKey(),
             ])->save();
 
-            // All three admins (the roster is verified intact by the policy above).
+            // Every admin on the roster (verified intact by the policy above).
             // Same connection/transaction: a notification failure rolls back the request.
             Notification::send(AdminUser::query()->get(), new ChangeRequestPending($request, $requester->display_name));
 
