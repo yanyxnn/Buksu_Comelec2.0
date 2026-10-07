@@ -15,6 +15,8 @@ A change to a new course/program makes the student's COMELEC year level 1st Year
 ## Import behavior
 Upload → staging → validation → preview → approval → chunked import → summary. Match students by institutional ID; never create duplicates for an existing ID.
 
+Phase 03A (implemented): the official import updates the placement and name of **existing** students and appends a `student_enrollments` history row per batch; it stamps `students.last_import_batch_id` (which Phase 02 student login requires). It never changes `institutional_id`, `institutional_email` or `google_subject`. The source `Sex` and `No.` columns are not part of the student domain and are ignored. Because the official source has no institutional email, the importer **never creates a student**: an unknown ID is routed to exception review rather than given a fabricated email. See `DATA_IMPORT.md`.
+
 ## Missing roster records
 Missing from a later roster does not automatically mean graduated. Current election eligibility is based on the approved election snapshot and controlled exceptions where legitimate.
 
