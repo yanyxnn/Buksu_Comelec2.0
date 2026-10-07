@@ -16,4 +16,4 @@
     };
 @endphp
 
-<span {{ $attributes->class("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap {$toneClasses}") }}>{{ $slot }}</span>
+<span {{ $attributes->class("inline-flex items-center gap-1 rounded-ui border px-1.5 py-0.5 text-xs leading-4 font-semibold tracking-wide whitespace-nowrap {$toneClasses}") }}>{{ $slot }}</span>

@@ -21,106 +21,130 @@
     --color-zinc-900: #171717;
     --color-zinc-950: #0a0a0a;
 
-    /* Flux reads these three. They now point at the --ui-accent* tokens below (same resulting colours). */
+    /* Flux reads these three. accent = solid fills, accent-content = accent used as text/link/border colour. */
     --color-accent: var(--ui-accent);
-    --color-accent-content: var(--ui-accent);
+    --color-accent-content: var(--ui-accent-content);
     --color-accent-foreground: var(--ui-accent-foreground);
 }
 
 /*
  * ============================================================================
- * UI FOUNDATION TOKENS  (Phase 03B-1A)
+ * BUKSU COMELEC VISUAL DESIGN SYSTEM  (Phase 03B-1B)
  * ----------------------------------------------------------------------------
- * NEUTRAL PLACEHOLDERS. This is NOT the BUKSU COMELEC theme: palette, typography
- * and radius are decided in the Visual Design phase by editing the values in
- * the two blocks below (:root = light, .dark = dark). Components in
- * resources/views/components/ui/ only use the utilities generated from these
- * tokens (bg-surface, text-muted, border-line, ...), so they need no per-page
- * or per-component change and no `dark:` variants.
+ * Every visual decision lives in the two token blocks below (:root = light,
+ * .dark = dark). Components in resources/views/components/ui/ only use the
+ * utilities generated from these tokens, so no `dark:` variants and no
+ * per-page styling are needed.
+ *
+ * Principles: paper-and-ink neutrals do the work; oxblood is the single
+ * institutional accent (primary actions, focus, selected); brass is a thin
+ * supporting rule only; semantic colours are reserved for state and are hue-
+ * separated from the oxblood accent (danger is a clear orange-leaning red).
  * ============================================================================
  */
 :root {
-    /* typography */
+    /* typography: body stays Instrument Sans; headings get a quiet classical serif stack (system fonts, no download) */
     --ui-font-body: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
-    --ui-font-heading: var(--ui-font-body);
+    --ui-font-heading: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
 
-    /* shape */
-    --ui-radius: 0.5rem;
+    /* shape and depth: restrained */
+    --ui-radius: 0.25rem;
+    --ui-shadow: 0 1px 2px rgb(30 27 24 / 0.05);
 
-    /* surfaces */
-    --ui-canvas: var(--color-neutral-50);
-    --ui-surface: var(--color-white);
-    --ui-surface-subtle: var(--color-neutral-50);
-    --ui-surface-sunken: var(--color-neutral-100);
+    /* surfaces: warm paper */
+    --ui-canvas: #f6f2ea;
+    --ui-surface: #fcfaf6;
+    --ui-surface-subtle: #f1ece2;
+    --ui-surface-sunken: #e9e3d6;
 
-    /* borders */
-    --ui-border: var(--color-neutral-200);
-    --ui-border-strong: var(--color-neutral-300);
+    /* borders: warm gray, thin */
+    --ui-border: #ddd5c6;
+    --ui-border-strong: #bfb4a0;
+    /* control boundary (inputs, secondary buttons): >= 3:1 against the surface (WCAG 1.4.11) */
+    --ui-control-border: #857b6b;
 
-    /* text hierarchy */
-    --ui-text: var(--color-neutral-900);
-    --ui-text-muted: var(--color-neutral-600);
-    --ui-text-subtle: var(--color-neutral-500);
+    /* text: ink */
+    --ui-text: #1e1b18;
+    --ui-text-muted: #595247;
+    --ui-text-subtle: #6b6357;
 
-    /* accent placeholder (Flux's --color-accent* read these) */
-    --ui-accent: var(--color-neutral-800);
-    --ui-accent-foreground: var(--color-white);
+    /* accent: oxblood (Flux's --color-accent* read these) */
+    --ui-accent: #6b1d2e;
+    --ui-accent-content: #6b1d2e;
+    --ui-accent-foreground: #fbf7f0;
+
+    /* brass: supporting rule/ornament only, never a fill for text or controls */
+    --ui-brass: #a8863a;
+    --ui-brass-text: #7a5c14;
 
     /* focus */
-    --ui-focus-ring: var(--color-neutral-800);
+    --ui-focus-ring: #6b1d2e;
 
     /* semantic states: soft background / border / text per tone */
-    --ui-info-bg: var(--color-sky-50);
-    --ui-info-border: var(--color-sky-200);
-    --ui-info-text: var(--color-sky-800);
-    --ui-success-bg: var(--color-emerald-50);
-    --ui-success-border: var(--color-emerald-200);
-    --ui-success-text: var(--color-emerald-800);
-    --ui-warning-bg: var(--color-amber-50);
-    --ui-warning-border: var(--color-amber-200);
-    --ui-warning-text: var(--color-amber-800);
-    --ui-danger-bg: var(--color-red-50);
-    --ui-danger-border: var(--color-red-200);
-    --ui-danger-text: var(--color-red-800);
+    --ui-info-bg: #eaf1f6;
+    --ui-info-border: #b9cfdf;
+    --ui-info-text: #1d4a6b;
+    --ui-success-bg: #e8f1e9;
+    --ui-success-border: #b4d1b9;
+    --ui-success-text: #1f5130;
+    --ui-warning-bg: #f7efd9;
+    --ui-warning-border: #e0cb94;
+    --ui-warning-text: #6b4a05;
+    --ui-danger-bg: #fbece8;
+    --ui-danger-border: #ebb5a8;
+    --ui-danger-text: #a12a14;
+    --ui-danger-solid: #b8301a;
+    --ui-danger-solid-foreground: #ffffff;
 }
 
 .dark {
-    --ui-canvas: var(--color-neutral-950);
-    --ui-surface: var(--color-neutral-900);
-    --ui-surface-subtle: var(--color-neutral-900);
-    --ui-surface-sunken: var(--color-neutral-800);
+    --ui-shadow: none;
 
-    --ui-border: var(--color-neutral-800);
-    --ui-border-strong: var(--color-neutral-700);
+    --ui-canvas: #141211;
+    --ui-surface: #1e1b19;
+    --ui-surface-subtle: #242120;
+    --ui-surface-sunken: #2c2825;
 
-    --ui-text: var(--color-neutral-50);
-    --ui-text-muted: var(--color-neutral-400);
-    --ui-text-subtle: var(--color-neutral-500);
+    --ui-border: #38332e;
+    --ui-border-strong: #51493f;
+    --ui-control-border: #8a8070;
 
-    --ui-accent: var(--color-white);
-    --ui-accent-foreground: var(--color-neutral-800);
+    --ui-text: #efe8dc;
+    --ui-text-muted: #b5ac9d;
+    --ui-text-subtle: #9a9183;
 
-    --ui-focus-ring: var(--color-neutral-200);
+    /* solid oxblood for fills; a lifted rose tint wherever the accent is used as text/link/border */
+    --ui-accent: #8a2438;
+    --ui-accent-content: #e3a3ae;
+    --ui-accent-foreground: #fbf7f0;
 
-    --ui-info-bg: color-mix(in oklab, var(--color-sky-500) 12%, transparent);
-    --ui-info-border: color-mix(in oklab, var(--color-sky-400) 30%, transparent);
-    --ui-info-text: var(--color-sky-300);
-    --ui-success-bg: color-mix(in oklab, var(--color-emerald-500) 12%, transparent);
-    --ui-success-border: color-mix(in oklab, var(--color-emerald-400) 30%, transparent);
-    --ui-success-text: var(--color-emerald-300);
-    --ui-warning-bg: color-mix(in oklab, var(--color-amber-500) 12%, transparent);
-    --ui-warning-border: color-mix(in oklab, var(--color-amber-400) 30%, transparent);
-    --ui-warning-text: var(--color-amber-300);
-    --ui-danger-bg: color-mix(in oklab, var(--color-red-500) 12%, transparent);
-    --ui-danger-border: color-mix(in oklab, var(--color-red-400) 30%, transparent);
-    --ui-danger-text: var(--color-red-300);
+    --ui-brass: #b9964a;
+    --ui-brass-text: #d4b46a;
+
+    --ui-focus-ring: #d4b46a;
+
+    --ui-info-bg: #1b2a35;
+    --ui-info-border: #2f4a5f;
+    --ui-info-text: #9cc4e0;
+    --ui-success-bg: #1b2c20;
+    --ui-success-border: #2f4d38;
+    --ui-success-text: #9fd1ac;
+    --ui-warning-bg: #2f2812;
+    --ui-warning-border: #55461d;
+    --ui-warning-text: #e3c670;
+    --ui-danger-bg: #331a15;
+    --ui-danger-border: #5c2e24;
+    --ui-danger-text: #f0a08e;
+    --ui-danger-solid: #c4402a;
+    --ui-danger-solid-foreground: #ffffff;
 }
 
-/* Expose the tokens as Tailwind utilities (bg-surface, text-muted, border-line, ring-focus, ...). */
+/* Expose the tokens as Tailwind utilities (bg-surface, text-muted, border-line, text-brass, ...). */
 @theme inline {
     --font-sans: var(--ui-font-body);
     --font-heading: var(--ui-font-heading);
     --radius-ui: var(--ui-radius);
+    --shadow-ui: var(--ui-shadow);
 
     --color-canvas: var(--ui-canvas);
     --color-surface: var(--ui-surface);
@@ -132,6 +156,8 @@
     --color-muted: var(--ui-text-muted);
     --color-subtle: var(--ui-text-subtle);
     --color-focus: var(--ui-focus-ring);
+    --color-brass: var(--ui-brass);
+    --color-brass-text: var(--ui-brass-text);
 
     --color-info-bg: var(--ui-info-bg);
     --color-info-border: var(--ui-info-border);
@@ -154,31 +180,222 @@
     ::before,
     ::backdrop,
     ::file-selector-button {
-        border-color: var(--color-gray-200, currentColor);
+        border-color: var(--ui-border);
+    }
+
+    html {
+        background-color: var(--ui-canvas);
+        color: var(--ui-text);
+        -webkit-font-smoothing: antialiased;
+    }
+
+    ::selection {
+        background-color: color-mix(in oklab, var(--ui-accent) 22%, transparent);
     }
 }
 
+/*
+ * Typography roles. Serif is limited to titles and section headings;
+ * labels, body and all figures stay in the sans body face (lining numerals).
+ */
+@utility ui-page-title {
+    font-family: var(--ui-font-heading);
+    font-size: 1.875rem;
+    line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--ui-text);
+}
+
+@utility ui-section-title {
+    font-family: var(--ui-font-heading);
+    font-size: 1.125rem;
+    line-height: 1.35;
+    font-weight: 600;
+    color: var(--ui-text);
+}
+
+/* small uppercase caption used for labels over figures and group captions */
+@utility ui-eyebrow {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ui-text-muted);
+}
+
+@utility ui-figure {
+    font-family: var(--ui-font-body);
+    font-size: 2rem;
+    line-height: 1.1;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    font-variant-numeric: lining-nums tabular-nums;
+    color: var(--ui-text);
+}
+
+/* thin brass rule: the one classical ornament */
+@utility ui-rule-brass {
+    border-top: 2px solid var(--ui-brass);
+}
+
+/* Shared keyboard-focus treatment for own-markup interactive elements. */
+@utility focus-ui {
+    &:focus-visible {
+        outline: 2px solid var(--ui-focus-ring);
+        outline-offset: 2px;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+ * Form foundation (Flux fields): labels, controls, focus, validation, disabled
+ * ------------------------------------------------------------------------- */
 [data-flux-field] {
     @apply grid gap-2;
 }
 
 [data-flux-label] {
-    @apply  !mb-0 !leading-tight;
+    @apply !mb-0 !leading-tight !font-medium text-ink;
+}
+
+[data-flux-description] {
+    color: var(--ui-text-muted);
+}
+
+[data-flux-control]:where(input, textarea, select, [data-flux-input]) {
+    border-radius: var(--ui-radius);
+}
+
+input[data-flux-control],
+textarea[data-flux-control],
+select[data-flux-control] {
+    background-color: var(--ui-surface);
+    color: var(--ui-text);
+    border-color: var(--ui-control-border);
+    box-shadow: none;
+}
+
+input[data-flux-control]::placeholder,
+textarea[data-flux-control]::placeholder {
+    color: var(--ui-text-subtle);
+}
+
+input[data-flux-control]:hover:not(:disabled),
+textarea[data-flux-control]:hover:not(:disabled),
+select[data-flux-control]:hover:not(:disabled) {
+    border-color: var(--ui-text-subtle);
 }
 
 input:focus[data-flux-control],
 textarea:focus[data-flux-control],
 select:focus[data-flux-control] {
-    @apply outline-hidden ring-2 ring-accent ring-offset-2 ring-offset-accent-foreground;
+    outline: 2px solid var(--ui-focus-ring);
+    outline-offset: 1px;
+    border-color: var(--ui-focus-ring);
+    box-shadow: none;
 }
 
-/* Shared keyboard-focus treatment for own-markup interactive elements (Flux controls keep their own). */
-@utility focus-ui {
-    &:focus-visible {
-        @apply outline-2 outline-offset-2 outline-focus;
-    }
+input[data-flux-control]:disabled,
+textarea[data-flux-control]:disabled,
+select[data-flux-control]:disabled {
+    background-color: var(--ui-surface-sunken);
+    color: var(--ui-text-subtle);
+    border-color: var(--ui-border);
+    cursor: not-allowed;
+    opacity: 1;
 }
 
-/* \[:where(&)\]:size-4 {
-    @apply size-4;
-} */
+/* validation: error text and invalid border (danger tokens; never the oxblood accent) */
+[data-flux-error] {
+    color: var(--ui-danger-text);
+}
+
+[data-flux-control][aria-invalid='true'],
+[data-flux-control][data-invalid] {
+    border-color: var(--ui-danger-solid);
+}
+
+[data-flux-control][aria-invalid='true']:focus,
+[data-flux-control][data-invalid]:focus {
+    outline-color: var(--ui-danger-solid);
+    border-color: var(--ui-danger-solid);
+}
+
+/* ---------------------------------------------------------------------------
+ * Button system. x-ui.button tags the Flux button with data-ui-button="<variant>"; these rules
+ * (unlayered, so they win over Flux/Tailwind utilities) own colour, radius and state. Flux still
+ * owns size, icon layout, the loading spinner and disabled semantics.
+ * ------------------------------------------------------------------------- */
+[data-ui-button] {
+    border-radius: var(--ui-radius);
+    font-weight: 500;
+    box-shadow: none;
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+[data-ui-button]:focus-visible {
+    outline: 2px solid var(--ui-focus-ring);
+    outline-offset: 2px;
+}
+
+[data-ui-button]:active:not(:disabled):not([aria-disabled='true']) {
+    filter: brightness(0.9);
+}
+
+[data-ui-button]:disabled,
+[data-ui-button][aria-disabled='true'],
+[data-ui-button][data-loading] {
+    cursor: not-allowed;
+}
+
+[data-ui-button]:disabled,
+[data-ui-button][aria-disabled='true'] {
+    opacity: 0.5;
+    filter: none;
+}
+
+/* primary: solid oxblood */
+[data-ui-button='primary'] {
+    background-color: var(--ui-accent);
+    color: var(--ui-accent-foreground);
+    border: 1px solid transparent;
+}
+
+[data-ui-button='primary']:hover:not(:disabled):not([aria-disabled='true']) {
+    background-color: color-mix(in oklab, var(--ui-accent) 86%, black);
+}
+
+/* secondary: thin strong border on the surface colour */
+[data-ui-button='secondary'] {
+    background-color: var(--ui-surface);
+    color: var(--ui-text);
+    border: 1px solid var(--ui-control-border);
+}
+
+[data-ui-button='secondary']:hover:not(:disabled):not([aria-disabled='true']) {
+    background-color: var(--ui-surface-sunken);
+}
+
+/* ghost: no chrome until hover */
+[data-ui-button='ghost'] {
+    background-color: transparent;
+    color: var(--ui-text-muted);
+    border: 1px solid transparent;
+}
+
+[data-ui-button='ghost']:hover:not(:disabled):not([aria-disabled='true']) {
+    background-color: var(--ui-surface-sunken);
+    color: var(--ui-text);
+}
+
+/* danger: solid, orange-leaning red so it never reads as the oxblood primary */
+[data-ui-button='danger'] {
+    background-color: var(--ui-danger-solid);
+    color: var(--ui-danger-solid-foreground);
+    border: 1px solid transparent;
+}
+
+[data-ui-button='danger']:hover:not(:disabled):not([aria-disabled='true']) {
+    background-color: color-mix(in oklab, var(--ui-danger-solid) 86%, black);
+}

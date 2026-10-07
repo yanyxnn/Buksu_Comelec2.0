@@ -11,6 +11,7 @@
 ])
 
 @php
+    $uiVariant = in_array($variant, ['primary', 'danger', 'ghost'], true) ? $variant : 'secondary';
     $fluxVariant = match ($variant) {
         'primary' => 'primary',
         'danger' => 'danger',
@@ -19,4 +20,4 @@
     };
 @endphp
 
-<flux:button :variant="$fluxVariant" :size="$size" {{ $attributes }}>{{ $slot }}</flux:button>
+<flux:button :variant="$fluxVariant" :size="$size" data-ui-button="{{ $uiVariant }}" {{ $attributes }}>{{ $slot }}</flux:button>

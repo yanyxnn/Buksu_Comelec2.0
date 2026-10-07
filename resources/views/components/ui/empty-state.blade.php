@@ -9,10 +9,10 @@
 ])
 
 <div {{ $attributes->class('flex flex-col items-center px-6 py-10 text-center') }}>
-    <div class="flex size-10 items-center justify-center rounded-full bg-surface-sunken text-muted">
+    <div class="flex size-10 items-center justify-center rounded-ui border border-line bg-surface-sunken text-muted">
         <flux:icon :name="$icon" class="size-5" />
     </div>
-    <h3 class="mt-3 font-heading text-base font-semibold text-ink">{{ $title }}</h3>
+    <h3 class="mt-4 ui-section-title">{{ $title }}</h3>
     @if ($description)
         <p class="mt-1 max-w-sm text-sm text-muted">{{ $description }}</p>
     @endif

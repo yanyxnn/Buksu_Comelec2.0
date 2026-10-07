@@ -15,12 +15,12 @@
     'footer' => null,
 ])
 
-<x-ui.card padding="none" {{ $attributes }}>
+<x-ui.card padding="none" {{ $attributes->class('ui-rule-brass') }}>
     @if ($title || $actions)
         <div class="flex items-start justify-between gap-4 border-b border-line px-4 py-3">
             <div class="min-w-0">
                 @if ($title)
-                    <h2 class="font-heading text-base font-semibold text-ink">{{ $title }}</h2>
+                    <h2 class="ui-section-title">{{ $title }}</h2>
                 @endif
                 @if ($description)
                     <p class="mt-0.5 text-sm text-muted">{{ $description }}</p>
