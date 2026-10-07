@@ -60,3 +60,6 @@ Student first-linking remains separate: a verified institutional Google email is
 The generic `change_requests` mechanism provides proposal/approval (requester never decides own request).
 
 See `SECURITY_AND_PRIVACY.md` and `DATABASE.md` for the detailed authentication, authorization, identity-binding, and data-model rules.
+
+## Student master data import (Phase 03A)
+The Data Center import is a domain/application service, not controller logic: `App\Services\StudentImport\ImportBatchService` owns the lifecycle (`BatchStateMachine` is the only definition of legal status transitions), `ImportValidator` stages and classifies rows into `import_batch_rows`, and `ImportChunkProcessor` applies confirmed rows to `students`/`student_enrollments` in per-chunk database transactions. Large files are processed in the background by the queued `ProcessImportBatch` job (restartable, idempotent, one at a time per batch via a batch-row lock). Institution-shaped values (header aliases, year-level labels, chunk size, limits) live in `config/comelec.php`, not in code. The importer writes only student master data and staging/batch records: it never touches `admin_users`, ballots, participation or eligibility. Details and guarantees: `DATA_IMPORT.md`.

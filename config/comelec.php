@@ -64,4 +64,42 @@ return [
      */
     'change_request_action_types' => [],
 
+    /*
+     * Student master data / Data Center import (Phase 03A).
+     *
+     * Everything institution-shaped lives here, not in code. `year_levels` is the ONE internal
+     * representation of a year level (the canonical label stored in students.current_year_level
+     * and student_enrollments.year_level) mapped from the tokens the source may use. The FIRST
+     * entry is the label assigned after a course change ("1st Year" rule). A source value that
+     * matches no token is INVALID: nothing is guessed and nothing is derived from subjects.
+     * `header_aliases` maps source column headers (lower-cased, whitespace-collapsed) to domain
+     * fields. Source columns that map to no field (e.g. "No.", "Sex") are never used.
+     */
+    'import' => [
+        'disk' => env('COMELEC_IMPORT_DISK', 'local'),
+        'directory' => 'student-imports',
+        'extensions' => ['csv', 'xlsx'],
+        'max_file_bytes' => 20 * 1024 * 1024,
+        // .xlsx only: cap on the DECLARED uncompressed size of the worksheet / shared-strings parts that are read
+        // into memory (guards against a small archive that expands enormously). ~7,966 rows need a few MB.
+        'max_uncompressed_part_bytes' => 100 * 1024 * 1024,
+        'chunk_size' => (int) env('COMELEC_IMPORT_CHUNK_SIZE', 500),
+        'year_levels' => [
+            '1st Year' => ['1', '1st', '1st year', 'first year'],
+            '2nd Year' => ['2', '2nd', '2nd year', 'second year'],
+            '3rd Year' => ['3', '3rd', '3rd year', 'third year'],
+            '4th Year' => ['4', '4th', '4th year', 'fourth year'],
+        ],
+        'header_aliases' => [
+            'institutional_id' => ['code'],
+            'last_name' => ['last name'],
+            'first_name' => ['first name'],
+            'middle_name' => ['middle name'],
+            'college' => ['colleges', 'college'],
+            'course' => ['course'],
+            'year_level' => ['year', 'year level'],
+            'status' => ['status'],
+        ],
+    ],
+
 ];
