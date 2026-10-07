@@ -9,9 +9,9 @@
 ])
 
 <x-ui.card {{ $attributes }}>
-    <p class="text-sm text-muted">{{ $label }}</p>
-    <p class="mt-1 font-heading text-2xl font-semibold tabular-nums text-ink">{{ $value }}</p>
+    <p class="ui-eyebrow">{{ $label }}</p>
+    <p class="mt-2 ui-figure">{{ $value }}</p>
     @if ($hint)
-        <p class="mt-1 text-xs text-subtle">{{ $hint }}</p>
+        <p class="mt-2 text-xs text-subtle">{{ $hint }}</p>
     @endif
 </x-ui.card>

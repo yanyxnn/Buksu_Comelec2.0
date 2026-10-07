@@ -16,7 +16,7 @@
         'lg' => 'p-6',
         default => 'p-4',
     };
-    $classes = "block rounded-ui border border-line bg-surface text-ink {$pad}"
+    $classes = "block rounded-ui border border-line bg-surface text-ink shadow-ui {$pad}"
         .($href ? ' transition-colors hover:border-line-strong focus-ui' : '');
 @endphp
 
