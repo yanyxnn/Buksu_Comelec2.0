@@ -25,6 +25,20 @@
     --color-accent: var(--ui-accent);
     --color-accent-content: var(--ui-accent-content);
     --color-accent-foreground: var(--ui-accent-foreground);
+
+    /*
+     * Approved "Modern Civic Editorial" brand palette (public welcome surface).
+     * Raw brand primitives only: they are NOT wired into the --ui-* tokens below, so the Phase 03B-1B
+     * system used by the portal/admin/student pages is untouched. Utilities: bg-plum-deep, text-gold, ...
+     */
+    --color-plum-dark: #1e0025;
+    --color-plum-deep: #380041;
+    --color-plum: #520060;
+    --color-plum-light: #6b0080;
+    --color-parchment: #f6f1e6;
+    --color-paper: #fffbf0;
+    --color-gold: #d9a83f;
+    --color-warm-ink: #241c27;
 }
 
 /*
