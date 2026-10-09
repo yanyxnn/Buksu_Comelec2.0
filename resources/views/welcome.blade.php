@@ -15,26 +15,26 @@
                     </a>
                 </header>
 
-                <main class="flex flex-1 flex-col justify-center py-12 lg:py-16">
+                <main class="flex flex-1 flex-col justify-center py-8 sm:py-12 lg:py-16">
                     @if (session('status'))
-                        <x-ui.alert tone="success" class="mb-8 max-w-md">{{ session('status') }}</x-ui.alert>
+                        <x-ui.alert tone="success" class="mb-6 max-w-md sm:mb-8">{{ session('status') }}</x-ui.alert>
                     @endif
 
                     <div class="w-12 border-t-2 border-gold" aria-hidden="true"></div>
-                    <p class="mt-5 text-xs font-semibold tracking-[0.14em] text-gold uppercase">{{ __('Student election platform') }}</p>
+                    <p class="mt-4 text-xs font-semibold tracking-[0.14em] text-gold uppercase sm:mt-5">{{ __('Student election platform') }}</p>
 
-                    <h1 class="mt-4 font-heading text-4xl leading-[1.08] font-semibold tracking-tight text-balance sm:text-5xl xl:text-6xl">
+                    <h1 class="mt-3 font-heading text-4xl leading-[1.08] font-semibold tracking-tight text-balance sm:mt-4 sm:text-5xl xl:text-6xl">
                         <span class="block">{{ __('Your Voice.') }}</span>
                         <span class="block">{{ __('Your Vote.') }}</span>
                         <span class="block text-gold">{{ __('Our Future.') }}</span>
                     </h1>
 
-                    <p class="mt-6 max-w-md text-base leading-relaxed text-parchment/80">
+                    <p class="mt-5 max-w-md text-base leading-relaxed text-parchment/80 sm:mt-6">
                         {{ __('The official student election platform of Bukidnon State University, run by the BukSU COMELEC. Sign in with Google to continue.') }}
                     </p>
 
                     <a href="{{ route('auth.google.redirect') }}"
-                       class="mt-8 inline-flex min-h-12 w-full items-center justify-center rounded-sm bg-gold px-6 text-base font-semibold text-warm-ink hover:bg-paper focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gold motion-safe:transition-colors sm:w-auto sm:self-start">
+                       class="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-sm bg-gold px-6 text-base font-semibold text-warm-ink hover:bg-paper focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gold motion-safe:transition-colors sm:mt-8 sm:w-auto sm:self-start">
                         {{ __('Continue with Google') }}
                     </a>
                 </main>

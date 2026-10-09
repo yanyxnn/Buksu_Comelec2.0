@@ -12,7 +12,8 @@
     name    basename without width/extension, e.g. "campus-main"
     alt     meaningful description for the real image (the fallback is hidden from assistive tech)
     label   which asset belongs here; shown outside production only
-    fit     cover (photography, cropped to the frame) | contain (artwork that must never be cropped)
+    fit     cover (photography, cropped to the frame) | contain (artwork that must never be cropped;
+            it sits on deep plum so any letterbox edge blends with the artwork's own dark plum ground)
     width/height   intrinsic pixel size of the 1400w file (reserves space, prevents layout shift)
     priority       true only for the one image that is visible on first paint
 --}}
@@ -32,7 +33,7 @@
     $fitClass = $fit === 'contain' ? 'object-contain' : 'object-cover';
 @endphp
 
-<div {{ $attributes->class('relative min-w-0 overflow-hidden rounded-sm '.($ready ? 'bg-paper' : 'bg-plum')) }}>
+<div {{ $attributes->class('relative min-w-0 overflow-hidden rounded-sm '.(! $ready ? 'bg-plum' : ($fit === 'contain' ? 'bg-plum-dark' : 'bg-paper'))) }}>
     @if ($ready)
         <img
             src="{{ asset("{$dir}{$name}-1400.webp") }}"
