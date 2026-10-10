@@ -21,10 +21,28 @@
     --color-zinc-900: #171717;
     --color-zinc-950: #0a0a0a;
 
+    /*
+ * PROVISIONAL WELCOME-PAGE PALETTE (not the final theme).
+ * Primary: plum, comelec, civic-gold. Text support only: warm-light, warm-muted.
+ * Used by resources/views/welcome.blade.php; restyle later by changing these five values.
+ */
+    --color-plum: #0d0018;
+    --color-comelec: #520060;
+    --color-civic-gold: #d9a83f;
+    --color-warm-light: #f8f0e3;
+    --color-warm-muted: #cbbecd;
+
     /* Flux reads these three. accent = solid fills, accent-content = accent used as text/link/border colour. */
     --color-accent: var(--ui-accent);
     --color-accent-content: var(--ui-accent-content);
     --color-accent-foreground: var(--ui-accent-foreground);
+
+    /* Provisional BUKSU COMELEC palette (admin shell). Raw brand colours only; screens use the --ui-* tokens. */
+    --color-plum: #0d0018;
+    --color-comelec: #520060;
+    --color-civic-gold: #d9a83f;
+    --color-warm-light: #f8f0e3;
+    --color-warm-muted: #cbbecd;
 }
 
 /*
@@ -398,4 +416,51 @@ select[data-flux-control]:disabled {
 
 [data-ui-button='danger']:hover:not(:disabled):not([aria-disabled='true']) {
     background-color: color-mix(in oklab, var(--ui-danger-solid) 86%, black);
+}
+
+/*
+ * ----------------------------------------------------------------------------
+ * ADMIN SHELL THEME
+ * Re-points the existing --ui-* tokens at the provisional plum / COMELEC purple / civic gold palette
+ * for everything rendered inside components.layouts.admin (the class is set on <html>). The shared
+ * x-ui components therefore keep working unchanged; the student/portal layout never gets this class.
+ * Declared after :root and .dark so it wins at equal specificity.
+ * ----------------------------------------------------------------------------
+ */
+.admin-shell {
+    color-scheme: dark;
+    --ui-radius: 0.75rem;
+    --ui-shadow: 0 12px 32px -16px rgb(0 0 0 / 0.7);
+
+    --ui-canvas: var(--color-plum);
+    --ui-surface: color-mix(in oklab, var(--color-comelec) 16%, var(--color-plum));
+    --ui-surface-subtle: color-mix(in oklab, var(--color-comelec) 26%, var(--color-plum));
+    --ui-surface-sunken: color-mix(in oklab, var(--color-comelec) 8%, var(--color-plum));
+
+    --ui-border: color-mix(in oklab, var(--color-warm-muted) 16%, var(--color-plum));
+    --ui-border-strong: color-mix(in oklab, var(--color-warm-muted) 30%, var(--color-plum));
+    --ui-control-border: color-mix(in oklab, var(--color-warm-muted) 60%, var(--color-plum));
+
+    --ui-text: var(--color-warm-light);
+    --ui-text-muted: var(--color-warm-muted);
+    --ui-text-subtle: color-mix(in oklab, var(--color-warm-muted) 82%, var(--color-plum));
+
+    --ui-accent: var(--color-civic-gold);
+    --ui-accent-content: var(--color-civic-gold);
+    --ui-accent-foreground: var(--color-plum);
+    --ui-brass: var(--color-civic-gold);
+    --ui-brass-text: var(--color-civic-gold);
+    --ui-focus-ring: var(--color-civic-gold);
+}
+
+.admin-shell ::selection {
+    background-color: color-mix(in oklab, var(--color-civic-gold) 30%, transparent);
+}
+
+/* Soft atmosphere behind the admin pages. Decorative; sits under all content. */
+@utility admin-backdrop {
+    background-image:
+        radial-gradient(52rem 26rem at 90% -8%, color-mix(in oklab, var(--color-comelec) 55%, transparent), transparent 70%),
+        radial-gradient(40rem 22rem at -8% 30%, color-mix(in oklab, var(--color-comelec) 28%, transparent), transparent 70%);
+    background-repeat: no-repeat;
 }
