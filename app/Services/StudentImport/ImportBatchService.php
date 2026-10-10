@@ -257,6 +257,26 @@ class ImportBatchService
         }
     }
 
+    /**
+     * Called by ValidateImportBatch::failed(). Fails ONLY a batch that is still VALIDATING; a batch that
+     * already moved on (PREVIEWED, FAILED by the service itself, ...) is left exactly as it is, including
+     * when it moves between the read and the conditional UPDATE (* Only the transition race is swallowed; unrelated database or audit failures are not hidden.).
+     */
+    public function failValidation(int $batchId, string $code, ?int $adminId = null): void
+    {
+        $batch = ImportBatch::query()->find($batchId);
+
+        if ($batch === null || $batch->status !== BatchStateMachine::VALIDATING) {
+            return;
+        }
+
+        try {
+            $this->fail($batch, $code, $adminId);
+        } catch (ImportTransitionException) {
+            // another actor changed the status first: nothing left to fail
+        }
+    }
+
     public function fail(ImportBatch $batch, string $code, ?int $adminId): void
     {
         $this->transition($batch, BatchStateMachine::FAILED);

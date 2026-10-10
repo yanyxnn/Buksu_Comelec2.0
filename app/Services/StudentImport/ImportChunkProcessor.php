@@ -62,7 +62,7 @@ class ImportChunkProcessor
         return $applied;
     }
 
-    /** @return int rows handled in this chunk (0 = nothing left) */
+    /** @return int rows handled in this chunk (0 = nothing left, or the batch is no longer PROCESSING) */
     public function processNextChunk(int $batchId, int $size): int
     {
         // The batch row is the per-batch mutex: every chunk transaction takes it FIRST, so two workers on
@@ -72,6 +72,13 @@ class ImportChunkProcessor
         // (processed_at cursor + UNIQUE(import_batch_id, student_id)), so re-running it is safe.
         return DB::transaction(function () use ($batchId, $size): int {
             $batch = DB::table('import_batches')->where('id', $batchId)->lockForUpdate()->first();
+
+            // Checked UNDER the batch lock and BEFORE any row is read or applied: a worker whose batch was
+            // failed, completed or otherwise moved away from PROCESSING while it ran stops here instead of
+            // applying more rows. (processAll() only checks once, at its start.)
+            if ($batch === null || $batch->status !== BatchStateMachine::PROCESSING) {
+                return 0;
+            }
 
             $rows = DB::table('import_batch_rows')
                 ->where('import_batch_id', $batchId)

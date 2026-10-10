@@ -199,6 +199,8 @@ test('replaying an already-applied chunk changes nothing, even after a course ch
 
     // Simulate "the processed marker was lost but the data committed": the row looks unprocessed again.
     DB::table('import_batch_rows')->where('import_batch_id', $batch->id)->update(['processed_at' => null]);
+    // ...mid-processing: chunks are only applied while the batch is PROCESSING (a COMPLETED batch applies nothing).
+    DB::table('import_batches')->where('id', $batch->id)->update(['status' => BatchStateMachine::PROCESSING, 'completed_at' => null]);
     $handled = app(ImportChunkProcessor::class)->processNextChunk((int) $batch->id, 500);
 
     expect($handled)->toBe(1);

@@ -109,3 +109,10 @@ Every material architecture or election-rule change must record date, reason, pr
 * **Not changed:** schema/migrations, import rules, Phase 01C, the concurrency verification script.
 * **Tests:** four cases appended to `tests/Feature/Import/ImportValidationTest.php` (matching checksum, modified file, tampering with a previewed batch, missing checksum).
 * **Not claimed:** this detects accidental or malicious change of the stored file after staging, not a compromised stage-time upload (the checksum is computed from the file received). Recovery of batches stuck in `VALIDATING`/`PROCESSING` is separate and unchanged.
+
+## 2026-10-10 — Phase 03A Hardening: queue settings and recovery guards (pending review)
+
+* **Queue:** the database queue `retry_after` default is now 960 s (was 90 s) in `config/queue.php`, documented in `.env.example`. The import jobs' 900 s timeouts are unchanged. With 90 s the queue could hand a still-running import to a second worker and, after the attempts ran out, fail it while it was still working.
+* **`ValidateImportBatch::failed()`** (new) calls `ImportBatchService::failValidation()`, which fails only a batch still `VALIDATING` (`VALIDATION_ERROR`, existing `import.batch.failed` audit event, no row data) and ignores status races.
+* **`ImportChunkProcessor::processNextChunk()`** now checks the locked batch's status before reading or applying rows and does nothing unless it is `PROCESSING`. One existing test (`replaying an already-applied chunk changes nothing`) now puts the batch back into `PROCESSING` first, because it replayed a chunk against a `COMPLETED` batch.
+* **Not changed:** `ProcessImportBatch::$uniqueFor`, migrations, import rules, Phase 01C, UI. **Not added:** a stale-worker sweeper. **Not claimed:** behaviour of a real queue worker (kill, redelivery, unique-lock expiry) has not been exercised; a manual MariaDB run with `QUEUE_CONNECTION=database` is still outstanding.

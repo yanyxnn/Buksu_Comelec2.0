@@ -252,3 +252,86 @@ test('the validation job moves a STAGED batch to PREVIEWED and ignores batches p
     (new ValidateImportBatch((int) $staged->id))->handle(app(ImportBatchService::class));
     expect($staged->refresh()->status)->toBe(BatchStateMachine::CONFIRMED); // untouched
 });
+
+/*
+ * Queue / recovery hardening: retry_after vs job timeouts, the validation job's failed() hook,
+ * and the processor refusing to apply rows unless the (locked) batch is still PROCESSING.
+ */
+
+test('the database queue retry_after is longer than every import job timeout', function () {
+    $retryAfter = (int) config('queue.connections.database.retry_after');
+    $timeouts = [(new ProcessImportBatch(1))->timeout, (new ValidateImportBatch(1))->timeout];
+
+    expect($timeouts)->toBe([900, 900]);
+    expect($retryAfter)->toBeGreaterThan(max($timeouts));
+    expect(preg_match('/^DB_QUEUE_RETRY_AFTER=960\r?$/m', file_get_contents(base_path('.env.example'))))->toBe(1);
+});
+
+test('the validation job failed hook fails a batch still VALIDATING, audits a coarse code, and re-validation recovers it', function () {
+    S::student('2021-00001');
+    $batch = S::stage(Kit::csv([['id' => '2021-00001', 'year' => '2']]));
+    DB::table('import_batches')->where('id', $batch->id)->update(['status' => BatchStateMachine::VALIDATING]); // a worker died mid-validation
+
+    (new ValidateImportBatch((int) $batch->id))->failed(new RuntimeException('worker died'));
+
+    expect($batch->refresh()->status)->toBe(BatchStateMachine::FAILED);
+    $audit = DB::table('audit_logs')->where('event_type', 'import.batch.failed')->where('target_id', (string) $batch->id)->value('metadata_json');
+    expect($audit)->toContain('VALIDATION_ERROR')->not->toContain('worker died')->not->toContain('2021-00001');
+
+    // existing recovery path: a FAILED, unconfirmed batch can be validated again
+    expect(S::service()->validate($batch)->status)->toBe(BatchStateMachine::PREVIEWED);
+});
+
+test('the validation job failed hook leaves every batch that is not VALIDATING exactly as it is', function (string $status) {
+    S::student('2021-00001');
+    $batch = S::stage(Kit::csv([['id' => '2021-00001']]));
+    DB::table('import_batches')->where('id', $batch->id)->update(['status' => $status]);
+    $events = DB::table('audit_logs')->count();
+
+    (new ValidateImportBatch((int) $batch->id))->failed(new RuntimeException('late'));
+
+    expect($batch->refresh()->status)->toBe($status);
+    expect(DB::table('audit_logs')->count())->toBe($events); // no audit event for a no-op
+})->with(['STAGED', 'PREVIEWED', 'CONFIRMED', 'PROCESSING', 'COMPLETED', 'FAILED']);
+
+test('the validation job failed hook ignores a batch that does not exist', function () {
+    (new ValidateImportBatch(987654))->failed(null);
+
+    expect(DB::table('audit_logs')->where('event_type', 'import.batch.failed')->count())->toBe(0);
+});
+
+test('the chunk processor applies nothing unless the locked batch is PROCESSING', function (string $status) {
+    [$batch, $ids] = processingBatchOfEight();
+    DB::table('import_batches')->where('id', $batch->id)->update(['status' => $status]);
+
+    $handled = app(ImportChunkProcessor::class)->processNextChunk((int) $batch->id, 3);
+
+    expect($handled)->toBe(0);
+    expect(S::enrollmentCount((int) $batch->id))->toBe(0);
+    expect(DB::table('import_batch_rows')->where('import_batch_id', $batch->id)->whereNotNull('processed_at')->count())->toBe(0);
+    expect(DB::table('students')->whereIn('id', array_values($ids))->where('current_year_level', '1st Year')->count())->toBe(8); // untouched
+})->with(['PREVIEWED', 'CONFIRMED', 'COMPLETED', 'FAILED']);
+
+test('the chunk processor still applies a chunk when the batch is PROCESSING, and ignores a missing batch', function () {
+    [$batch] = processingBatchOfEight();
+
+    expect(app(ImportChunkProcessor::class)->processNextChunk((int) $batch->id, 3))->toBe(3);
+    expect(S::enrollmentCount((int) $batch->id))->toBe(3);
+    expect(app(ImportChunkProcessor::class)->processNextChunk(987654, 3))->toBe(0);
+});
+
+test('a worker whose batch was failed mid-run stops applying rows, and a resume completes without duplicates', function () {
+    [$batch] = processingBatchOfEight();
+    $processor = app(ImportChunkProcessor::class);
+
+    expect($processor->processNextChunk((int) $batch->id, 3))->toBe(3);   // the first chunk commits
+
+    S::service()->fail($batch->refresh(), 'PROCESSING_ERROR', null);     // e.g. the queue failed the job meanwhile
+    expect($processor->processNextChunk((int) $batch->id, 3))->toBe(0);  // the still-running worker's next chunk is refused
+    expect(S::enrollmentCount((int) $batch->id))->toBe(3);
+
+    S::service()->startProcessing($batch->refresh());                     // sync queue in tests: runs the job
+    expect($batch->refresh()->status)->toBe(BatchStateMachine::COMPLETED);
+    expect(S::enrollmentCount((int) $batch->id))->toBe(8);
+    expect(DB::table('student_enrollments')->where('import_batch_id', $batch->id)->distinct()->count('student_id'))->toBe(8);
+});
