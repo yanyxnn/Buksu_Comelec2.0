@@ -3,6 +3,8 @@
 use App\Models\Student;
 use App\Services\StudentImport\BatchStateMachine;
 use App\Services\StudentImport\ImportIssue;
+use App\Services\StudentImport\ImportTransitionException;
+use App\Services\StudentImport\ImportValidator;
 use App\Services\StudentImport\SourceFileException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -221,4 +223,71 @@ test('a file that failed before confirmation can be re-validated after the file 
     // FAILED before confirmation may legally re-enter validation (it fails again: same bytes)
     $again = S::service()->validate($batch);
     expect($again->status)->toBe(BatchStateMachine::FAILED);
+});
+
+test('a stored file whose SHA-256 matches the staged checksum validates normally', function () {
+    S::student('2020-00001');
+
+    $batch = S::stage(Kit::csv([['id' => '2020-00001']]));
+    $stored = Storage::disk((string) config('comelec.import.disk'))->get(ImportValidator::storagePath($batch));
+
+    expect(hash('sha256', $stored))->toBe($batch->checksum);
+
+    $validated = S::service()->validate($batch);
+
+    expect($validated->status)->toBe(BatchStateMachine::PREVIEWED);
+    expect(S::rows($validated))->toHaveCount(1);
+});
+
+test('a modified stored file fails closed before parsing: no rows staged, no student or history change', function () {
+    S::student('2020-00001', ['current_course' => 'BSN']);
+    $students = json_encode(DB::table('students')->orderBy('id')->get()->all());
+
+    $batch = S::stage(Kit::csv([['id' => '2020-00001', 'course' => 'BSIT']]));
+    // Same shape, same row count, different content: only the hash can tell it apart.
+    Storage::disk((string) config('comelec.import.disk'))
+        ->put(ImportValidator::storagePath($batch), Kit::csv([['id' => '2020-00001', 'course' => 'BSED']]));
+
+    $result = S::service()->validate($batch);
+
+    expect($result->status)->toBe(BatchStateMachine::FAILED);
+    expect(DB::table('import_batch_rows')->where('import_batch_id', $batch->id)->count())->toBe(0);
+    expect(json_encode(DB::table('students')->orderBy('id')->get()->all()))->toBe($students);
+    expect(S::enrollmentCount())->toBe(0);
+
+    $event = DB::table('audit_logs')->where('event_type', 'import.batch.failed')->latest('id')->first();
+    expect(json_decode($event->metadata_json, true)['failure_code'])->toBe(SourceFileException::CHECKSUM_MISMATCH);
+
+    // an unconfirmed FAILED batch can only be re-validated, and the file is still wrong: it can never be confirmed.
+    expect(fn () => S::service()->confirm($result))->toThrow(ImportTransitionException::class);
+    expect(S::service()->validate($result)->status)->toBe(BatchStateMachine::FAILED);
+});
+
+test('tampering with a previewed batch\'s file blocks re-validation and leaves the earlier staging untouched', function () {
+    S::student('2020-00001');
+
+    $batch = S::preview(Kit::csv([['id' => '2020-00001']]));
+    expect($batch->status)->toBe(BatchStateMachine::PREVIEWED);
+    $staged = json_encode(S::rows($batch)->all());
+
+    Storage::disk((string) config('comelec.import.disk'))
+        ->put(ImportValidator::storagePath($batch), Kit::csv([['id' => '2020-00001', 'last' => 'Changed']]));
+
+    $again = S::service()->validate($batch);
+
+    expect($again->status)->toBe(BatchStateMachine::FAILED);
+    expect(json_encode(S::rows($again)->all()))->toBe($staged); // nothing deleted, nothing rebuilt from the bad file
+    expect(S::enrollmentCount())->toBe(0);
+});
+
+test('a batch with no recorded checksum is refused rather than trusted', function () {
+    S::student('2020-00001');
+
+    $batch = S::stage(Kit::csv([['id' => '2020-00001']]));
+    DB::table('import_batches')->where('id', $batch->id)->update(['checksum' => null]);
+
+    $result = S::service()->validate($batch->refresh());
+
+    expect($result->status)->toBe(BatchStateMachine::FAILED);
+    expect(DB::table('import_batch_rows')->where('import_batch_id', $batch->id)->count())->toBe(0);
 });

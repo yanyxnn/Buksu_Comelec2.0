@@ -42,7 +42,7 @@ Accepted: `.csv` (UTF-8, BOM tolerated; any other encoding fails closed) and `.x
 | `Year` | `current_year_level` / enrollment `year_level` |
 | `No.`, `Sex`, anything else | **ignored**: never identity, never stored on a student (the raw row is preserved in staging only) |
 
-A file missing a required column, or mapping two columns to one field, fails as a whole with a coarse reason (`MISSING_REQUIRED_COLUMNS`, `DUPLICATE_COLUMNS`, `EMPTY_FILE`, `INVALID_ENCODING`, `FILE_UNREADABLE`, `UNSUPPORTED_FILE_TYPE`, `FILE_TOO_LARGE`). Size limits: `max_file_bytes` (compressed upload) and, for `.xlsx`, `max_uncompressed_part_bytes` (declared uncompressed size of the parts read into memory).
+A file missing a required column, or mapping two columns to one field, fails as a whole with a coarse reason (`MISSING_REQUIRED_COLUMNS`, `DUPLICATE_COLUMNS`, `EMPTY_FILE`, `INVALID_ENCODING`, `FILE_UNREADABLE`, `UNSUPPORTED_FILE_TYPE`, `FILE_TOO_LARGE`, `CHECKSUM_MISMATCH`). Before anything is parsed, validation hashes the stored source file (SHA-256) and compares it with `import_batches.checksum` recorded at staging; a different or missing checksum fails the batch with `CHECKSUM_MISMATCH` and writes no staging rows (a previously previewed batch keeps its earlier rows but can no longer be confirmed). Size limits: `max_file_bytes` (compressed upload) and, for `.xlsx`, `max_uncompressed_part_bytes` (declared uncompressed size of the parts read into memory).
 
 ### Normalization and validation
 Only harmless formatting is normalized: trimming and collapsing whitespace, and mapping the year token. **Case is never changed.** An identity that a spreadsheet has turned into a numeric artifact (`2.0E7`, `20001.0`) is INVALID, not repaired.

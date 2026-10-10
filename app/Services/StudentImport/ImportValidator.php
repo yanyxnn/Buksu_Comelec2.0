@@ -89,6 +89,19 @@ class ImportValidator
         fclose($out);
         fclose($in);
 
+        // Integrity gate: hash the exact bytes about to be parsed (the local copy, so the file cannot change between
+        // the check and the parse) against the SHA-256 recorded at staging. A missing or different checksum fails
+        // closed BEFORE anything is parsed or staged; the caller's transaction (which deletes and rebuilds staging
+        // rows) has not started yet, so a mismatch writes nothing.
+        $expected = (string) ($batch->checksum ?? '');
+        $actual = (string) hash_file('sha256', $tmp);
+
+        if ($expected === '' || ! hash_equals(strtolower($expected), $actual)) {
+            @unlink($tmp);
+
+            throw new SourceFileException(SourceFileException::CHECKSUM_MISMATCH);
+        }
+
         return [$tmp, static function () use ($tmp) {
             if (is_file($tmp)) {
                 @unlink($tmp);

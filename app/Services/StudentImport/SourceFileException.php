@@ -21,6 +21,9 @@ class SourceFileException extends RuntimeException
 
     public const DUPLICATE_COLUMNS = 'DUPLICATE_COLUMNS';
 
+    /** The stored source file no longer matches the SHA-256 recorded when it was staged (or none was recorded). */
+    public const CHECKSUM_MISMATCH = 'CHECKSUM_MISMATCH';
+
     public function __construct(public readonly string $reason, string $message = '')
     {
         parent::__construct($message !== '' ? $message : $reason);
