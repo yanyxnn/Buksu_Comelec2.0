@@ -52,16 +52,23 @@ Year levels have ONE internal representation, the label stored in `students.curr
 ### Row classification (`import_batch_rows.classification`)
 | Classification | Meaning | Applied? |
 |---|---|---|
-| `UPDATED` | Valid row for an **existing** student (matched by exact `institutional_id`) | Yes, on processing |
-| `NEW` | Reserved. **Never produced today** (see "New students" below) | n/a |
-| `DUPLICATE_IN_FILE` | The same ID appears more than once. Identical repeats: the first occurrence stays `UPDATED`, repeats are skipped. **Conflicting** content: *no* occurrence is applied (the file must be corrected). IDs differing only by case are one identity | No |
-| `INVALID` | Missing/over-long/mangled ID, missing name/college/course, bad year or status | No |
-| `NEEDS_EXCEPTION_REVIEW` | Case-only college/course inconsistency (`CON` vs `cON`), or an unknown student (see below) | No |
+| `UPDATED` | Valid row for an existing student (matched by exact `institutional_id`) | Yes, on processing |
+| `NEW` | Eligible new student with a supported 7-digit legacy or 10-digit current numeric ID and no blocking validation or exception-review issue. The institutional email is generated during processing using the provisional convention described below. | Yes, on processing |
+| `DUPLICATE_IN_FILE` | The same ID appears more than once. For identical repeats, the first occurrence continues through normal validation and classification, and later repeats are skipped. For conflicting content, no occurrence is applied; correct the file and re-upload. IDs differing only by case are treated as one identity. | No |
+| `INVALID` | Missing, over-long or malformed ID; missing last name, college or course; invalid year or status; or other invalid source fields. | No |
+| `NEEDS_EXCEPTION_REVIEW` | Case-only college/course inconsistency, or an unknown student whose ID is not eligible for current automatic provisioning. Eligible unknown students are classified `NEW` if there are no blocking review issues. | No |
 
 Each staged row stores the untouched `raw_row_json`, the `normalized_json` (including a preview of the resulting placement and whether the course changed), `issues_json` (machine-readable `{code, field}` reasons, carrying no student data) and `source_row_number`. Case-only ambiguity is judged against the **stored master values first**, then the file (a unique most-frequent spelling wins; a tie flags every spelling); genuinely different values are never treated as the same.
 
-### New students and institutional email (fail closed)
-`students.institutional_email` is NOT NULL and UNIQUE, and the official source carries **no** institutional email. The importer therefore never creates a student: an ID with no existing student is classified `NEEDS_EXCEPTION_REVIEW` with issue `NEW_STUDENT_REQUIRES_INSTITUTIONAL_EMAIL`. An email is **never** synthesized from the ID, never guessed from a domain or naming convention, and an existing student's email is never overwritten. How new students are provisioned (and what the review step does with these rows) is an open decision (see `OPEN_DECISIONS.md`).
+### New students and institutional email (provisional implementation behavior)
+
+The official source file does not include institutional email. The current implementation can create a new student during confirmed batch processing when the row is otherwise valid, the institutional ID is exactly 7 numeric digits (legacy) or 10 numeric digits (current), and no duplicate, validation, or exception-review condition prevents application.
+
+For eligible new students, the current implementation generates `institutional_email` using the convention `<institutional_id>@student.buksu.edu.ph`. **This is a provisional development convention, not a confirmed institutional policy.** The university and the responsible Google Workspace authority must confirm the required email format and domain before this convention is treated as approved for staging or production. Generating an address does not establish that the mailbox exists.
+
+A newly created student has `google_subject = NULL`. Google authentication must continue to follow the existing identity-resolution and first-linking rules. The importer never overwrites an existing student's `institutional_id`, `institutional_email`, or `google_subject`.
+
+Unknown students with unsupported IDs, or rows with other validation or exception-review issues, are not created. Staging and validation do not create student records; creation occurs only when an eligible `NEW` row is applied during confirmed batch processing. Student creation, enrollment history, the row's processed marker, and batch counters are handled within the chunk transaction, so a failed chunk rolls back its changes.
 
 ### Batch lifecycle
 `STAGED -> VALIDATING -> PREVIEWED -> CONFIRMED -> PROCESSING -> COMPLETED | FAILED`, enforced only by `BatchStateMachine` through `ImportBatchService` (status and counters are not mass-assignable; each change is a conditional `UPDATE ... WHERE status = <expected>`). `PREVIEWED` may be re-validated (staging is rebuilt, never duplicated). `FAILED` before confirmation can only go back to validation; `FAILED` after confirmation can only resume processing. `COMPLETED` is terminal.

@@ -130,3 +130,11 @@ Every material architecture or election-rule change must record date, reason, pr
 * **Privacy:** explicit column selects; `google_subject`, raw import rows and file checksums are never read; component state holds ids only; the search text is not placed in the URL. Viewing students is not audited (no existing page audits reads) — recorded as a possible later decision, not invented here.
 * **CSS:** the existing import-modal backdrop blur selector in `resources/css/app.css` is extended to the student modal; the blur itself is unchanged.
 * **Not changed:** migrations, schema, models, import logic, authentication, election and voting logic. No student write action exists.
+
+## 2026-10-13 — Phase 03B post-merge clarification: new-student provisioning
+- **Implementation clarification:** The merged Phase 03B implementation can create eligible new student records during confirmed batch processing. Eligible IDs are exactly 7 numeric digits (legacy) or 10 numeric digits (current), provided the row has no blocking validation or exception-review issue.
+- **Email convention:** New-student institutional emails are currently generated as `<institutional_id>@student.buksu.edu.ph`. This remains a provisional development convention, not confirmed institutional policy. The university and responsible Google Workspace authority must confirm the required format and domain before staging or production use.
+- **Identity protection:** New records begin with `google_subject = NULL`. Existing students' institutional IDs, institutional emails, and Google subjects are not overwritten by the importer. Student import remains separate from administrator provisioning.
+- **Processing integrity:** Student creation, enrollment history, processed-row marking, and batch counters are handled within the chunk transaction. Staging and validation do not create student records.
+- **Documentation alignment:** `DATA_IMPORT.md`, `STUDENT_MANAGEMENT.md`, `OPEN_DECISIONS.md`, and `TEST_PLAN.md` are being aligned with the merged implementation. This entry records current behavior; it does not constitute institutional approval of the generated email convention.
+- **Still open:** Institutional confirmation of the email convention, exception-review resolution policy, authoritative batch precedence, and recovery of a lost processing job remain outstanding.
