@@ -91,7 +91,7 @@ return [
             '4th Year' => ['4', '4th', '4th year', 'fourth year'],
         ],
         'header_aliases' => [
-            'institutional_id' => ['code'],
+            'institutional_id' => ['code', 'student id'],
             'last_name' => ['last name'],
             'first_name' => ['first name'],
             'middle_name' => ['middle name'],

@@ -93,7 +93,9 @@ final class ImportTestKit
         foreach ($rows as $r) {
             $n++;
             fputcsv($handle, [
-                $n, $r['id'] ?? '', $r['last'] ?? 'Dela Cruz', $r['first'] ?? 'Juan', $r['middle'] ?? '',
+                $n, $r['id'] ?? '', $r['last'] ?? 'Dela Cruz',
+                    array_key_exists('first', $r) ? $r['first'] : 'Juan',
+                    $r['middle'] ?? '',
                 'F', $r['college'] ?? 'CON', $r['course'] ?? 'BSN', $r['year'] ?? '1',
             ], ',', '"', '');
         }

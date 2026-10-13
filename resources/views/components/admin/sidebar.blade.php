@@ -11,7 +11,8 @@
             ['Dashboard', 'admin.home', 'squares-2x2'],
         ],
         'Elections' => [
-            ['Student Master / Data Center', null, 'circle-stack'],
+            ['Student Import', 'admin.data-center', 'circle-stack'],
+            ['Student Masterlist', 'admin.students', 'user-group'],
             ['Elections', null, 'calendar-days'],
             ['Eligibility', null, 'identification'],
             ['Candidates', null, 'users'],

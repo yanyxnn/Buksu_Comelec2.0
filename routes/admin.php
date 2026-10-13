@@ -16,4 +16,6 @@ Route::prefix('admin')->name('admin.')->middleware('admin')->group(function () {
     Volt::route('/', 'admin.home')->name('home');
     Volt::route('approvals', 'admin.approvals')->name('approvals');
     Volt::route('access-issues', 'admin.access-issues')->name('access-issues');
+    Volt::route('data-center', 'admin.data-center')->name('data-center');
+    Volt::route('students', 'admin.students')->name('students');
 });

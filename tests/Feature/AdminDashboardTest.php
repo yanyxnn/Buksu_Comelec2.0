@@ -31,16 +31,16 @@ test('the dashboard uses the admin shell, header identity and the existing logou
 test('sidebar links only existing routes and shows every planned entry as unavailable', function () {
     $html = dashboardHtml($this);
 
-    foreach ([route('admin.home'), route('admin.approvals'), route('admin.access-issues')] as $href) {
+    foreach ([route('admin.home'), route('admin.approvals'), route('admin.access-issues'), route('admin.data-center'), route('admin.students')] as $href) {
         expect($html)->toContain('href="'.$href.'"');
     }
 
-    foreach (['Student Master / Data Center', 'Elections', 'Eligibility', 'Candidates', 'Results &amp; Analytics', 'Audit &amp; Incidents', 'Admin Logs', 'Backup &amp; Recovery', 'Operational Health'] as $label) {
+    foreach (['Student Import', 'Student Masterlist', 'Elections', 'Eligibility', 'Candidates', 'Results &amp; Analytics', 'Audit &amp; Incidents', 'Admin Logs', 'Backup &amp; Recovery', 'Operational Health'] as $label) {
         expect($html)->toContain($label);
     }
 
-    // 9 planned pages, each rendered twice (desktop + mobile drawer) as non-link, aria-disabled entries.
-    expect(substr_count($html, 'aria-disabled="true"'))->toBe(18)
+    // 8 planned pages, each rendered twice (desktop + mobile drawer) as non-link, aria-disabled entries.
+    expect(substr_count($html, 'aria-disabled="true"'))->toBe(16)
         ->and($html)->toContain('aria-current="page"');
 });
 
@@ -49,7 +49,7 @@ test('no invented routes: the planned pages are not linked anywhere on the dashb
     $internal = collect($m[1])->filter(fn ($h) => str_starts_with($h, url('/')))->unique()->values()->all();
 
     expect($internal)->each->toBeIn([
-        url('/'), route('admin.home'), route('admin.approvals'), route('admin.access-issues'),
+        url('/'), route('admin.home'), route('admin.approvals'), route('admin.access-issues'), route('admin.data-center'), route('admin.students'),
     ]);
 });
 

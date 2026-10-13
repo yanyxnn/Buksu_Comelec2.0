@@ -6,6 +6,7 @@ use App\Models\ImportBatch;
 use App\Services\StudentImport\BatchStateMachine;
 use App\Services\StudentImport\ImportBatchService;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Throwable;
 
@@ -13,7 +14,7 @@ use Throwable;
  * Background validation/classification of a STAGED (or re-validated) batch. The service marks the
  * batch FAILED itself on any error, so the job does not retry blindly.
  */
-class ValidateImportBatch implements ShouldQueue
+class ValidateImportBatch implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
 
@@ -21,7 +22,16 @@ class ValidateImportBatch implements ShouldQueue
 
     public int $timeout = 900;
 
+    /** Lock expiry (seconds), longer than the timeout so a crashed worker cannot block the batch for long. */
+    public int $uniqueFor = 1000;
+
     public function __construct(public readonly int $batchId, public readonly ?int $adminId = null) {}
+
+    /** One queued/running validation per batch, whichever administrator or session queued it. */
+    public function uniqueId(): string
+    {
+        return 'validate-import-batch-'.$this->batchId;
+    }
 
     public function handle(ImportBatchService $service): void
     {

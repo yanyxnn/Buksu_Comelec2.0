@@ -31,12 +31,35 @@ it('records the changed placement in the preview, including a course change to 1
     expect($result['preview']['resulting_year_level'])->toBe('1st Year');
 });
 
-it('never classifies an unknown student as NEW and never invents an email: it needs review', function () {
-    $result = classifyRaw([], null);
+it('classifies an unknown student with a valid 10-digit ID as NEW', function () {
+    $result = classifyRaw(
+        ['institutional_id' => '2301109909'],
+        null
+    );
+
+    expect($result['classification'])->toBe(RowClassifier::NEW);
+    expect($result['issues'])->toBe([]);
+});
+
+it('classifies an unknown student with a valid 7-digit legacy ID as NEW', function () {
+    $result = classifyRaw(
+        ['institutional_id' => '1234567'],
+        null
+    );
+
+    expect($result['classification'])->toBe(RowClassifier::NEW);
+    expect($result['issues'])->toBe([]);
+});
+
+it('keeps an unknown ID outside the accepted formats in exception review', function () {
+    $result = classifyRaw(
+        ['institutional_id' => '2020-77777'],
+        null
+    );
 
     expect($result['classification'])->toBe(RowClassifier::NEEDS_EXCEPTION_REVIEW);
-    expect(array_column($result['issues'], 'code'))->toBe([ImportIssue::NEW_STUDENT_REQUIRES_INSTITUTIONAL_EMAIL]);
-    expect($result['classification'])->not->toBe(RowClassifier::NEW);
+    expect(array_column($result['issues'], 'code'))
+        ->toBe([ImportIssue::NEW_STUDENT_REQUIRES_INSTITUTIONAL_EMAIL]);
 });
 
 it('classifies bad data as INVALID', function (array $raw, string $code) {
@@ -47,9 +70,19 @@ it('classifies bad data as INVALID', function (array $raw, string $code) {
 })->with([
     'missing id' => [['institutional_id' => ''], ImportIssue::ID_MISSING],
     'bad year' => [['year_level' => '9'], ImportIssue::YEAR_INVALID],
-    'no first name' => [['first_name' => ''], ImportIssue::FIRST_NAME_MISSING],
     'bad status' => [['status' => 'IRREGULAR'], ImportIssue::STATUS_INVALID],
 ]);
+
+it('allows an existing student row with no first name', function () {
+    $result = classifyRaw(
+        ['first_name' => null],
+        ImportTestKit::student()
+    );
+
+    expect($result['classification'])->toBe(RowClassifier::UPDATED);
+    expect(array_column($result['issues'], 'code'))
+        ->not->toContain(ImportIssue::FIRST_NAME_MISSING);
+});
 
 it('sends a case-only college inconsistency to review, not to a silent merge', function () {
     $index = new CanonicalValueIndex;
