@@ -464,3 +464,10 @@ select[data-flux-control]:disabled {
         radial-gradient(40rem 22rem at -8% 30%, color-mix(in oklab, var(--color-comelec) 28%, transparent), transparent 70%);
     background-repeat: no-repeat;
 }
+/* Blur the background behind the import and student details modals */
+dialog[aria-labelledby="batch-title"]::backdrop,
+dialog[aria-labelledby="student-title"]::backdrop {
+    background-color: rgb(10 2 18 / 55%);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+}

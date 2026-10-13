@@ -14,20 +14,124 @@ beforeEach(function () {
     Storage::fake((string) config('comelec.import.disk'));
 });
 
-test('an official import updates the placement, appends history and stamps last_import_batch_id', function () {
-    $student = S::student('2020-00001', ['current_year_level' => '2nd Year', 'last_import_batch_id' => null]);
+test('a valid new 10-digit student is created with a generated email and enrollment history', function () {
+    $batch = S::complete(Kit::csv([
+        [
+            'id' => '2301109909',
+            'last' => 'Cruz',
+            'first' => 'Ana',
+            'middle' => 'Maria',
+            'college' => 'CON',
+            'course' => 'BSN',
+            'year' => '2',
+        ],
+    ]));
 
-    $batch = S::complete(Kit::csv([['id' => '2020-00001', 'last' => 'Santos', 'first' => 'Ana', 'year' => '3']]));
+    $student = Student::query()
+        ->where('institutional_id', '2301109909')
+        ->firstOrFail();
+
+    expect($batch->status)->toBe(BatchStateMachine::COMPLETED);
+
+    expect([
+        (int) $batch->records_received,
+        (int) $batch->records_created,
+        (int) $batch->records_updated,
+        (int) $batch->records_errored,
+    ])->toBe([1, 1, 0, 0]);
+
+    expect($student->institutional_email)
+        ->toBe('2301109909@student.buksu.edu.ph');
+
+    expect($student->google_subject)->toBeNull();
+    expect((int) $student->last_import_batch_id)->toBe((int) $batch->id);
+
+    $enrollment = DB::table('student_enrollments')
+        ->where('student_id', $student->id)
+        ->where('import_batch_id', $batch->id)
+        ->first();
+
+    expect($enrollment)->not->toBeNull();
+
+    expect([
+        $enrollment->college,
+        $enrollment->course,
+        $enrollment->year_level,
+        $enrollment->status,
+    ])->toBe(['CON', 'BSN', '2nd Year', 'ACTIVE']);
+});
+
+test('a valid new 7-digit legacy student is created with a generated email', function () {
+    $batch = S::complete(Kit::csv([
+        [
+            'id' => '1234567',
+            'last' => 'Cruz',
+            'first' => 'Ana',
+            'middle' => 'Maria',
+            'college' => 'CON',
+            'course' => 'BSN',
+            'year' => '2',
+        ],
+    ]));
+
+    $student = Student::query()
+        ->where('institutional_id', '1234567')
+        ->firstOrFail();
+
+    expect($batch->status)->toBe(BatchStateMachine::COMPLETED);
+    expect($student->institutional_email)
+        ->toBe('1234567@student.buksu.edu.ph');
+    expect((int) $batch->records_created)->toBe(1);
+});
+
+test('a new student with no first name is created with a null first name', function () {
+    $batch = S::complete(Kit::csv([
+        [
+            'id' => '1234568',
+            'last' => 'Santos',
+            'first' => null,
+            'middle' => null,
+            'college' => 'CON',
+            'course' => 'BSN',
+            'year' => '2',
+        ],
+    ]));
+
+    $student = Student::query()
+        ->where('institutional_id', '1234568')
+        ->firstOrFail();
+
+    expect($student->first_name)->toBeNull();
+    expect($student->institutional_email)
+        ->toBe('1234568@student.buksu.edu.ph');
+    expect($batch->status)->toBe(BatchStateMachine::COMPLETED);
+    expect((int) $batch->records_created)->toBe(1);
+});
+
+test('a blank incoming first name does not erase an existing first name', function () {
+    $student = S::student('2020-00001', [
+        'first_name' => 'Existing',
+    ]);
+
+    $student->forceFill([
+        'google_subject' => 'google-sub-preserve-name-test',
+    ])->save();
+
+    $originalEmail = $student->institutional_email;
+
+    S::complete(Kit::csv([
+        [
+            'id' => '2020-00001',
+            'first' => null,
+        ],
+    ]));
 
     $fresh = $student->fresh();
-    expect($batch->status)->toBe(BatchStateMachine::COMPLETED);
-    expect($fresh->current_year_level)->toBe('3rd Year');
-    expect($fresh->last_name)->toBe('Santos');
-    expect((int) $fresh->last_import_batch_id)->toBe((int) $batch->id);
 
-    $enrollment = DB::table('student_enrollments')->where('student_id', $student->id)->first();
-    expect((int) $enrollment->import_batch_id)->toBe((int) $batch->id);
-    expect([$enrollment->college, $enrollment->course, $enrollment->year_level, $enrollment->status])->toBe(['CON', 'BSN', '3rd Year', 'ACTIVE']);
+    expect($fresh->first_name)->toBe('Existing');
+    expect($fresh->institutional_email)->toBe($originalEmail);
+    expect($fresh->google_subject)
+        ->toBe('google-sub-preserve-name-test');
 });
 
 test('batch counters reconcile: received = updated + created + errored, and match staged rows and enrollments', function () {

@@ -166,17 +166,22 @@ test('year levels map deterministically and unknown values are INVALID', functio
     expect(S::rows($batch)[3]->classification)->toBe('INVALID');
 });
 
-test('an unknown student is never created or given a fabricated email, and is never NEW', function () {
-    $batch = S::complete(Kit::csv([['id' => '2020-77777']]));
+test('a valid unknown 10-digit student is classified NEW without being created during validation', function () {
+    $batch = S::preview(Kit::csv([
+        ['id' => '2301109909'],
+    ]));
 
     $row = S::rows($batch)[0];
-    expect($row->classification)->toBe('NEEDS_EXCEPTION_REVIEW');
-    expect(Student::query()->where('institutional_id', '2020-77777')->exists())->toBeFalse();
-    expect(DB::table('students')->count())->toBe(0);
-    expect(DB::table('import_batch_rows')->where('classification', 'NEW')->count())->toBe(0);
-    expect($batch->status)->toBe(BatchStateMachine::COMPLETED);
-    expect((int) $batch->records_updated)->toBe(0);
-    expect((int) $batch->records_errored)->toBe(1);
+
+    expect($row->classification)->toBe('NEW');
+    expect($row->resolved_student_id)->toBeNull();
+
+    expect(Student::query()
+        ->where('institutional_id', '2301109909')
+        ->exists())->toBeFalse();
+
+    expect($batch->refresh()->status)->toBe(BatchStateMachine::PREVIEWED);
+    expect((int) $batch->records_created)->toBe(0);
 });
 
 test('re-validating a previewed batch rebuilds the staging rows without duplicates', function () {

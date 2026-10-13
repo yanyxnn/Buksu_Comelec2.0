@@ -28,7 +28,7 @@ Never import directly into production master tables before validation/preview/ap
 
 ## Phase 03A implementation (domain/application core)
 
-Status: implemented as backend/domain code with automated tests; **no upload UI or route exists yet** (the future dashboard is out of scope). The entry point is `App\Services\StudentImport\ImportBatchService`. This section describes what the code does today; the sections above remain the approved pipeline.
+Status: implemented as backend/domain code with automated tests. The entry point is `App\Services\StudentImport\ImportBatchService`; the administrator page that drives it is described under "Phase 03B admin UI" below. This section describes what the code does today; the sections above remain the approved pipeline.
 
 ### Source contract
 Accepted: `.csv` (UTF-8, BOM tolerated; any other encoding fails closed) and `.xlsx` (first worksheet only). The historical reference shape is `No., Code, Last Name, First Name, Middle Name, Sex, Colleges, Course, Year`. Headers are mapped through `config('comelec.import.header_aliases')` (case/spacing/BOM-insensitive):
@@ -84,3 +84,23 @@ Course/program changed: the new official placement is recorded and the COMELEC y
 
 ### Privacy
 Audit events (`import.batch.*`) carry the batch id, status and counters only (plus a coarse failure code): no student data, filenames, emails or Google identifiers. Raw staging rows are never exposed through a route. Committed tests use synthetic data only.
+
+---
+
+## Phase 03B admin UI (Student Import)
+
+The sidebar label, page title and heading read "Student Import" (renamed from "Student Master / Data Center"; the route and URL `/admin/data-center` are unchanged). The imported students themselves are browsed on the read-only Student Masterlist (`/admin/students`).
+
+Route `admin.data-center` (`GET /admin/data-center`, Volt page `resources/views/livewire/admin/data-center.blade.php`), inside the existing `admin` middleware group and linked from the admin sidebar. The page only calls `ImportBatchService` and the existing queued jobs; it never writes a batch status or counter, never parses a file, and takes the uploader id from the admin guard (no client-controlled uploader field exists).
+
+* **Upload:** file (extensions and maximum size from `config('comelec.import')`), plus required free-text academic year and semester (leading and trailing spaces are trimmed, inner text is kept; no allowed-value list, no term validation, never used to decide which data is newer). `stage()` registers the batch, then `ValidateImportBatch` is queued; nothing is validated or applied inside the Livewire request.
+* **Batches:** newest first (display order only, not precedence), paginated, with status, term, uploader, and the counters recorded on the batch. A batch is opened with `?batch=<id>`.
+* **Preview:** classification totals (from `ImportBatchService::classificationCounts()`), and a server-side paginated (25/page) row table filterable by classification. Rows show the **normalized** values (`normalized_json`), the resulting placement/changed fields, and safe issue codes with plain-language text (`issues_json`). `raw_row_json` is never selected.
+* **Review warning and confirmation:** rows that will not be applied (`INVALID`, `DUPLICATE_IN_FILE`, `NEEDS_EXCEPTION_REVIEW`) are summarised, and the administrator must tick an acknowledgement before confirming. The page states that it does not resolve those rows and does not create students (an unknown student would need an institutional email that the file does not contain). A batch with nothing applicable cannot be confirmed from the page (a presentation guard, not a domain rule). Confirm calls `confirm()` then `startProcessing()`.
+* **Actions offered** are computed from `BatchStateMachine::canTransition()` and re-checked on every action: validate/re-validate for `STAGED`, `PREVIEWED`, and `FAILED` before confirmation; confirm for `PREVIEWED`; start for `CONFIRMED`; resume for `FAILED` after confirmation. A confirmed batch is never offered re-validation.
+* **Progress and results:** `PROCESSING` shows applied/applicable rows from `processed_at`; `COMPLETED` shows the recorded counters. A row is shown as applied only if it was applicable and has `processed_at`.
+* **Failure:** the coarse failure code is read from the existing `import.batch.failed` audit event and mapped to fixed text. Exception messages, stack traces and source contents are never shown.
+* **Polling and waiting (v2):** after queueing validation the page records the batch state (status, `updated_at`, validated/failed audit-event count) *before* dispatch. If the state already differs afterwards (synchronous queue or very fast worker) nothing is awaited; otherwise `tick()` clears the wait as soon as the state differs, or after 120 s. The poll element is rendered only while something is running or awaited and is not `.visible`-gated, so it keeps polling when scrolled to the batch details. Idle `STAGED`/`CONFIRMED` batches do not poll.
+* **One validation job per batch (v2):** `ValidateImportBatch` implements `ShouldBeUnique` (`uniqueId` = `validate-import-batch-{id}`, `uniqueFor` 1000 s > the 900 s timeout). Repeated clicks or concurrent administrator sessions cannot queue a second job while one is pending/running; the lock is released when the job ends. No other job behaviour changed.
+* **Polling:** the page uses `wire:poll.5s="tick"` (without the `.visible` modifier) only while the selected batch is `STAGED`/`VALIDATING`/`CONFIRMED`/`PROCESSING`, a job was just queued for it, or a listed batch is `VALIDATING`/`PROCESSING`; idle pages do not poll.
+* **Not provided:** exception-row resolution, new-student provisioning, discarding a batch, recovery of a `PROCESSING` batch whose job was lost (see `CHANGE_LOG.md`, Phase 03A queue hardening), and any change to migrations, the service layer, jobs, or authentication.

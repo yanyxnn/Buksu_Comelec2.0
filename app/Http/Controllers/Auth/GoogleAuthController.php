@@ -41,7 +41,6 @@ class GoogleAuthController extends Controller
         try {
             $identity = $google->identity();
             $decision = $this->resolver->resolve($identity);
-
             if ($decision->isDenied()) {
                 return $this->deny($audit, $decision->reason, $identity, $correlationId);
             }

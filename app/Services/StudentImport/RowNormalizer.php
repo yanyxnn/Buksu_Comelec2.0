@@ -87,9 +87,6 @@ final class RowNormalizer
         if ($last === '') {
             $issues[] = ImportIssue::make(ImportIssue::LAST_NAME_MISSING, 'last_name');
         }
-        if ($first === '') {
-            $issues[] = ImportIssue::make(ImportIssue::FIRST_NAME_MISSING, 'first_name');
-        }
         foreach (['last_name' => $last, 'first_name' => $first, 'middle_name' => $middle] as $field => $value) {
             if (mb_strlen($value, 'UTF-8') > self::MAX_NAME) {
                 $issues[] = ImportIssue::make(ImportIssue::NAME_TOO_LONG, $field);

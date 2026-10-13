@@ -58,12 +58,21 @@ it('rejects unknown or missing year values instead of guessing', function (strin
     ['-1', ImportIssue::YEAR_INVALID], ['fifth', ImportIssue::YEAR_INVALID], ['', ImportIssue::YEAR_MISSING],
 ]);
 
-it('requires names, college and course', function () {
+it('requires last name, college and course but allows missing first name', function () {
     $result = ImportTestKit::normalizer()->normalize(ImportTestKit::raw([
         'last_name' => ' ', 'first_name' => null, 'college' => '', 'course' => '',
     ]));
 
-    expect(codes($result))->toContain(ImportIssue::LAST_NAME_MISSING, ImportIssue::FIRST_NAME_MISSING, ImportIssue::COLLEGE_MISSING, ImportIssue::COURSE_MISSING);
+    expect(codes($result))->toContain(
+        ImportIssue::LAST_NAME_MISSING,
+        ImportIssue::COLLEGE_MISSING,
+        ImportIssue::COURSE_MISSING
+    );
+    expect(codes($result))->not->toContain(
+        ImportIssue::FIRST_NAME_MISSING
+    );
+
+    expect($result['values']['first_name'])->toBeNull();
 });
 
 it('treats an empty middle name as null', function () {
