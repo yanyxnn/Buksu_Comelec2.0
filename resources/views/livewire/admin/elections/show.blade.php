@@ -51,6 +51,12 @@ new #[Layout('components.layouts.admin')] #[Title('Election')] class extends Com
                 DB::table('representation_groups')->selectRaw('COUNT(*)')->whereColumn('representation_groups.election_id', 'elections.id'),
                 'scope_groups_count',
             )
+            ->selectSub(
+                DB::table('contests')->selectRaw('COUNT(*)')
+                    ->whereColumn('contests.election_id', 'elections.id')
+                    ->whereColumn('contests.election_config_version_id', 'elections.current_config_version_id'),
+                'contests_count',
+            )
             ->firstOrFail();
     }
 
@@ -64,6 +70,18 @@ new #[Layout('components.layouts.admin')] #[Title('Election')] class extends Com
         $admin = Auth::guard('admin')->user();
 
         return $admin instanceof AdminUser && Gate::forUser($admin)->allows('manageScope', $election);
+    }
+
+    /** Whether the contests page would let this administrator change contests right now (the policy decides). */
+    #[Computed]
+    public function canManageContests(): bool
+    {
+        $election = Election::query()
+            ->select(['id', 'state', 'current_config_version_id', 'locked_config_version_id'])
+            ->findOrFail($this->electionId);
+        $admin = Auth::guard('admin')->user();
+
+        return $admin instanceof AdminUser && Gate::forUser($admin)->allows('manageContests', $election);
     }
 }; ?>
 
@@ -91,6 +109,11 @@ new #[Layout('components.layouts.admin')] #[Title('Election')] class extends Com
             @else
                 <x-ui.button :href="route('admin.elections.scope', $e->id)" wire:navigate>{{ __('View scope') }}</x-ui.button>
             @endif
+            @if ($this->canManageContests)
+                <x-ui.button variant="primary" :href="route('admin.elections.contests', $e->id)" wire:navigate>{{ __('Configure contests') }}</x-ui.button>
+            @else
+                <x-ui.button :href="route('admin.elections.contests', $e->id)" wire:navigate>{{ __('View contests') }}</x-ui.button>
+            @endif
             <x-ui.button icon="arrow-left" :href="route('admin.elections')" wire:navigate>{{ __('All elections') }}</x-ui.button>
         </div>
     </div>
@@ -99,7 +122,7 @@ new #[Layout('components.layouts.admin')] #[Title('Election')] class extends Com
         <x-ui.alert tone="success" wire:key="flash">{{ session('election_status') }}</x-ui.alert>
     @endif
 
-    <x-ui.alert tone="info">{{ __('This workspace is read-only. Scope is configured on the scope page while the election is an editable draft; contests, eligibility, candidates, ballot rules and the schedule are later configuration steps.') }}</x-ui.alert>
+    <x-ui.alert tone="info">{{ __('This workspace is read-only. Scope and contests are configured on their own pages while the election is an editable draft; eligibility, candidates, ballot rules and the schedule are later configuration steps.') }}</x-ui.alert>
 
     <div class="grid items-start gap-6 lg:grid-cols-2">
         <x-ui.panel :title="__('Saved details')" class="min-w-0">
@@ -133,6 +156,17 @@ new #[Layout('components.layouts.admin')] #[Title('Election')] class extends Com
                             {{ trans_choice(':count representation group|:count representation groups', (int) $e->scope_groups_count, ['count' => (int) $e->scope_groups_count]) }}
                         @endif
                         <a href="{{ route('admin.elections.scope', $e->id) }}" wire:navigate class="ml-1 text-xs underline">{{ $this->canManageScope ? __('Configure') : __('View') }}</a>
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-muted">{{ __('Contests') }}</dt>
+                    <dd>
+                        @if ((int) $e->contests_count === 0)
+                            {{ __('No contests yet') }}
+                        @else
+                            {{ trans_choice(':count contest|:count contests', (int) $e->contests_count, ['count' => (int) $e->contests_count]) }}
+                        @endif
+                        <a href="{{ route('admin.elections.contests', $e->id) }}" wire:navigate class="ml-1 text-xs underline">{{ $this->canManageContests ? __('Configure') : __('View') }}</a>
                     </dd>
                 </div>
                 <div><dt class="text-muted">{{ __('Schedule') }}</dt><dd>@if ($e->opens_at || $e->closes_at) {{ $fmtTime($e->opens_at) }} → {{ $fmtTime($e->closes_at) }} @else {{ __('Not scheduled yet') }} @endif <span class="text-xs text-muted">({{ $e->timezone }})</span></dd></div>

@@ -39,6 +39,14 @@ class Election extends Model
      */
     public const SCOPE_EDITABLE_STATES = [self::STATE_DRAFT];
 
+    /**
+     * States in which contests and their voting rules may be edited (Phase 04C). Same decision as scope: DRAFT only,
+     * until the DRAFT -> READY transition and readiness re-validation are approved (docs/OPEN_DECISIONS.md).
+     *
+     * @var list<string>
+     */
+    public const CONTEST_EDITABLE_STATES = [self::STATE_DRAFT];
+
     protected $table = 'elections';
 
     protected $guarded = ['*'];
@@ -66,6 +74,11 @@ class Election extends Model
         return $this->hasMany(RepresentationGroup::class);
     }
 
+    public function contests(): HasMany
+    {
+        return $this->hasMany(Contest::class);
+    }
+
     /**
      * Whether scope may be edited right now: an editable state, nothing locked, and the CURRENT configuration version
      * belongs to this election, is still a DRAFT and has no frozen JSON. Pure: callers pass the version row they
@@ -73,7 +86,24 @@ class Election extends Model
      */
     public function allowsScopeEditing(?ElectionConfigVersion $currentVersion): bool
     {
-        return in_array($this->state, self::SCOPE_EDITABLE_STATES, true)
+        return $this->allowsDraftConfigurationEditing(self::SCOPE_EDITABLE_STATES, $currentVersion);
+    }
+
+    /** Whether contests and their rules may be edited right now: the same draft conditions as scope (Phase 04C). */
+    public function allowsContestEditing(?ElectionConfigVersion $currentVersion): bool
+    {
+        return $this->allowsDraftConfigurationEditing(self::CONTEST_EDITABLE_STATES, $currentVersion);
+    }
+
+    /**
+     * The one draft-editability rule behind every configuration step: the state is one of $editableStates, nothing is
+     * locked, and the CURRENT version belongs to this election, is a DRAFT and has no frozen JSON.
+     *
+     * @param  list<string>  $editableStates
+     */
+    private function allowsDraftConfigurationEditing(array $editableStates, ?ElectionConfigVersion $currentVersion): bool
+    {
+        return in_array($this->state, $editableStates, true)
             && $this->locked_config_version_id === null
             && $this->current_config_version_id !== null
             && $currentVersion !== null

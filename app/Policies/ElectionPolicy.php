@@ -56,6 +56,30 @@ class ElectionPolicy
         return $election->allowsScopeEditing($version);
     }
 
+    /** Reading an election's contests: any authorized administrator, in any lifecycle state. */
+    public function viewContests(Authenticatable $actor, Election $election): bool
+    {
+        return $this->isAuthorizedAdmin($actor);
+    }
+
+    /**
+     * Changing an election's contests and voting rules: an authorized administrator AND an election that still allows
+     * it (Election::allowsContestEditing). The service re-checks this on the rows it has locked.
+     */
+    public function manageContests(Authenticatable $actor, Election $election): bool
+    {
+        if (! $this->isAuthorizedAdmin($actor) || $election->current_config_version_id === null) {
+            return false;
+        }
+
+        $version = ElectionConfigVersion::query()
+            ->select(['id', 'election_id', 'status', 'config_json'])
+            ->whereKey($election->current_config_version_id)
+            ->first();
+
+        return $election->allowsContestEditing($version);
+    }
+
     private function isAuthorizedAdmin(Authenticatable $actor): bool
     {
         return $actor instanceof AdminUser
