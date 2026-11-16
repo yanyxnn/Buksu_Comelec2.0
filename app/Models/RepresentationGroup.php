@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * An election-owned grouping of contests around configurable dimensions (`representation_groups`).
@@ -29,5 +30,10 @@ class RepresentationGroup extends Model
     public function election(): BelongsTo
     {
         return $this->belongsTo(Election::class);
+    }
+
+    public function contests(): HasMany
+    {
+        return $this->hasMany(Contest::class);
     }
 }
