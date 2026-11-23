@@ -128,6 +128,18 @@ Separate regression entry, full Pest suite on SQLite: **494 passed, 1 skipped; 1
 
 Limitations that these results do not remove: UUID shape validation is not UUID generation; a session with `check_constraint_checks=0` can bypass the CHECK; the advisory lock does not prevent ordinary application writers; MariaDB DDL is not atomic; populated legacy ballot data is deliberately refused. Phase 01C is **not** complete: the ballot writer and runtime UUIDv4 generation remain future work.
 
+### Phase 01C suites present and not found
+
+| Suite | Status |
+|---|---|
+| `phase1b_integrity_tests.sh`, `phase01c_d3_refusal_tests.sh`, `phase01c_d3_uuidv4_schema_tests.sh` | Present in `database/verification/`; results above (verified on MariaDB 10.4.32, as supplied by the project owner) |
+| Voting concurrency tests (duplicate-submission races, deadlock, vote versus close/pause, stale read) | **Not found in searched locations; further recovery remains possible.** Unverified. |
+| Database-role / privilege tests | Not found in searched locations; further recovery remains possible. Unverified. No role or GRANT definitions exist in the repository. |
+| Reconciliation oracles and seeded-corruption tests | Not found in searched locations; further recovery remains possible. Unverified. |
+| Earlier historical figures for an "expanded Phase 01C suite" | Unsupported by any artifact; not results of the verified record. |
+
+`phase03a_import_concurrency.php` and `phase03a_queue_recovery.php` test student import only and are not Phase 01C voting tests. Any newly developed expanded suite must be tested on MariaDB 10.4.32 (decision D-5). See `docs/PHASE01C_VERIFICATION_REGISTER.md`.
+
 ## Phase 03A tests (student master / Data Center import core)
 All data is synthetic; no real student data is committed. Suites: `tests/Unit/StudentImport/*`, `tests/Feature/Import/*`, plus `database/verification/phase03a_import_concurrency.php`.
 - Unit: header mapping (aliases, BOM, ignored `No.`/`Sex`), string-preserved identity (leading zeros, any length, numeric artifacts INVALID), year mapping (invalid/missing rejected), placement rule (course change => 1st Year; unchanged course keeps incoming year), case-only canonicalization, row classification, state machine (exact allowed transitions), CSV/XLSX readers (fail closed on bad encoding/corrupt file; zip-bomb size cap).

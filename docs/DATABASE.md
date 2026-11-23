@@ -6,11 +6,13 @@ Implementation status:
 - **Phase 01A** — architecture approved.
 - **Phase 01B** — migration implementation complete; database integrity hardening implemented.
 - **Phase 01B verification** — canonical local MariaDB 10.4.32 integrity verification: **76 passed / 0 failed**.
-- **Phase 01C** — database integrity testing is the active phase. Phase 01C design is approved. The D3 Domain B identifier schema change is implemented and verified on MariaDB 10.4.32 (see Section 14); the ballot writer and runtime UUIDv4 generation remain future work. **Phase 01C is not complete.**
+- **Phase 01C** — database integrity testing is the active phase. Earlier documentation describes the Phase 01C design as approved. However, its standalone approval and transaction/security decision record has not been recovered, so the approval scope remains unverified. The D3 Domain B identifier schema change is implemented and verified on MariaDB 10.4.32 (see Section 14); the ballot writer and runtime UUIDv4 generation remain future work. Verification artifacts, scope and decisions are tracked in `docs/PHASE01C_VERIFICATION_REGISTER.md` and `docs/PHASE01C_SCOPE_AND_DECISIONS.md`. **Phase 01C is not complete.**
 
 This document is the approved database architecture baseline derived from the completed Phase 1A domain model review. It defines the intended MySQL domain structure, relationships, integrity boundaries, immutability rules, ballot-secrecy boundary, and migration order.
 
 Laravel migrations are the executable schema source of truth (established in Phase 01B). If an implementation detail differs from this document, the discrepancy must be reviewed rather than silently changing the architecture.
+
+**Terminology note.** In this document, **Domain A** (voter identity) and **Domain B** (anonymous ballot lifecycle) refer only to the ballot-secrecy boundary defined in Section 7. The letters C, D and E in the headings of Sections 4 to 6 are legacy structural groupings of tables; they do not denote secrecy domains.
 
 \---
 
@@ -43,22 +45,11 @@ Phase 01B integrity verification evidence:
 
 Database integrity, concurrency, security, and reconciliation testing is in progress.
 
-The Phase 01C design and transaction/security decisions are approved. A substantial portion of the Phase 01C verification harness has now been implemented and exercised.
+Earlier text of this document recorded that the Phase 01C design and transaction/security decisions were approved and that a substantial part of an expanded verification harness had been implemented and exercised, with specific pass counts, concurrency cases, database-role checks and seeded-corruption reconciliation. **None of those artifacts or results is supported by anything in the repository.** A search of the repository history, branches, stashes and the owner's Project and Downloads folders did not find them. They are therefore classified as **not found in searched locations (further recovery remains possible)** and **unverified**, and the historical pass counts are **not restated here as results**. ZIP archives and sibling worktrees have not been exhaustively searched. No standalone record of the approved design decisions was found either.
 
-Verified so far:
+What is verified for Phase 01C is the D3 work and the Phase 01B regression harness (see below and `docs/PHASE01C_PATCH_STATUS.md`). The full artifact-by-artifact status is in `docs/PHASE01C_VERIFICATION_REGISTER.md`; scope and decisions (including the deferred decisions D-1 to D-4) are in `docs/PHASE01C_SCOPE_AND_DECISIONS.md`; a PROPOSED, UNVERIFIED Domain A / Domain B privilege matrix is in `docs/PHASE01C_PRIVILEGE_MATRIX.md`.
 
-- Phase 01C baseline: **23 passed / 0 failed**.
-- Extended Phase 01C suite: **56 passed / 0 failed**.
-- Reconciliation oracles: **11 passed / 0 failed**.
-- Phase 01B regression verification was re-confirmed during the Phase 01C verification sequence.
-- The full Phase 01C verification sequence was executed twice with identical results.
-- Concurrency cases include duplicate-submission races, forced deadlock behavior, blocking close/vote behavior, and stale-read canary behavior.
-- Database-role security checks include real MariaDB privilege enforcement.
-- Reconciliation testing includes clean fixtures and deliberately seeded corruption cases.
-
-The expanded Phase 01C verification work was exercised on MariaDB 10.11.14 in the verification environment.
-
-**Important:** MariaDB 10.4.32 remains a required Phase 01C completion gate for the expanded Phase 01C suite. The 10.11.14 results are verification evidence but do not replace the required MariaDB 10.4.32 gate.
+**Important:** MariaDB 10.4.32 remains a required Phase 01C completion gate. Any newly developed expanded verification suite must be tested on MariaDB 10.4.32 (decision D-5). Results from other MariaDB versions are exploratory and do not replace that gate.
 
 The approved Phase 01C D3 identifier correction has been implemented:
 
@@ -200,7 +191,7 @@ Key fields:
 
 \---
 
-**## 3. Domain B — election configuration and snapshots**
+**## 3. Election configuration and snapshots**
 
 **### \`elections\`**
 

@@ -2,6 +2,8 @@
 
 **Scope:** Domain B identifier schema only (CHAR(26) ULID → CHAR(36) lowercase-UUIDv4-shaped for four primary keys and five dependent columns). **Phase 01C is NOT complete.** This document records the D3 Domain B identifier schema work only and does not declare Phase 01C complete.
 
+**Note:** this file covers D3 only. The status of every other Phase 01C verification artifact is in `docs/PHASE01C_VERIFICATION_REGISTER.md`; scope and decisions are in `docs/PHASE01C_SCOPE_AND_DECISIONS.md`; the PROPOSED, UNVERIFIED privilege matrix is in `docs/PHASE01C_PRIVILEGE_MATRIX.md`. The D3 results below are unchanged.
+
 ## What the patch contains
 - Migration `database/migrations/2026_11_13_000100_normalize_domain_b_ballot_ids_to_uuidv4.php` (forward-only, empty-table-only, fail-closed, lock-first).
 - `database/verification/phase01c_d3_uuidv4_schema_tests.sh` (read-only schema checks).
