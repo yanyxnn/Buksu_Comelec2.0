@@ -415,8 +415,10 @@ test('the page renders its empty state and a blank form with nothing preselected
 
     $html = scopePage($election)->assertOk()->assertSee('No representation groups yet')->html();
 
-    expect($html)->toContain('theme-2k26')->toContain('wire:submit="save"')->toContain('Create representation group')
+    expect($html)->toContain('theme-2k26')->toContain('wire:submit="save"')->toContain('Create representation group')->toContain('Add category')
         ->toContain('do not decide who may vote or stand')
+        ->toContain('How this works')->toContain('Category name')->toContain('internal identifier automatically')
+        ->toContain('Add category')->not->toContain('Dimension key')
         ->not->toContain('read-only')
         ->not->toMatch('/value="[^"]+"[^>]*wire:model="dimensions\.0\.key"/');
 
@@ -434,7 +436,7 @@ test('the form accepts the largest allowed dimension: 100 values of 255 characte
         ->set('dimensions', [['key' => 'dimension_a', 'values' => implode("\n", $values)]])
         ->call('save')
         ->assertHasNoErrors()
-        ->assertSee('Representation group created.');
+        ->assertSee('Representation group created successfully.');
 
     $stored = RepresentationGroup::query()->sole()->scope_definition_json['dimension_a'];
     expect($stored)->toHaveCount(100)->and($stored)->toBe($values)
@@ -446,10 +448,10 @@ test('the page creates, edits and deletes a group and reports it', function () {
 
     $page = scopePage($election)
         ->set('name', 'Page group')
-        ->set('dimensions', [['key' => '  Dimension_B ', 'values' => "beta one\nbeta two\n\nbeta one"], ['key' => 'dimension_a', 'values' => 'alpha']])
+        ->set('dimensions', [['key' => '  Dimension B ', 'values' => "beta one\nbeta two\n\nbeta one"], ['key' => 'Dimension A', 'values' => 'alpha']])
         ->call('save')
         ->assertHasNoErrors()
-        ->assertSee('Representation group created.')->assertSee('Page group')->assertSee('beta one, beta two');
+        ->assertSee('Representation group created successfully.')->assertSee('Page group')->assertSee('beta one')->assertSee('beta two');
 
     $group = RepresentationGroup::query()->sole();
     expect($group->scope_definition_json)->toBe(['dimension_a' => ['alpha'], 'dimension_b' => ['beta one', 'beta two']])
@@ -458,15 +460,15 @@ test('the page creates, edits and deletes a group and reports it', function () {
 
     $page->call('editGroup', $group->getKey())
         ->assertSet('name', 'Page group')->assertSet('editingGroupId', $group->getKey())
-        ->assertSet('dimensions', [['key' => 'dimension_a', 'values' => 'alpha'], ['key' => 'dimension_b', 'values' => "beta one\nbeta two"]])
+        ->assertSet('dimensions', [['key' => 'Dimension A', 'values' => 'alpha'], ['key' => 'Dimension B', 'values' => "beta one\nbeta two"]])
         ->assertSee('Edit representation group')
-        ->set('name', 'Renamed group')->set('dimensions', [['key' => 'dimension_c', 'values' => 'gamma']])
-        ->call('save')->assertHasNoErrors()->assertSee('Representation group updated.')->assertSee('Renamed group');
+        ->set('name', 'Renamed group')->set('dimensions', [['key' => 'Dimension C', 'values' => 'gamma']])
+        ->call('save')->assertHasNoErrors()->assertSee('Changes saved successfully.')->assertSee('Renamed group');
 
     expect($group->fresh()->scope_definition_json)->toBe(['dimension_c' => ['gamma']])
         ->and(scopeAudit('election.scope_group_updated')->first()->election_id)->toBe($election->id);
 
-    $page->call('deleteGroup', $group->getKey())->assertSee('Representation group deleted.')->assertSee('No representation groups yet');
+    $page->call('deleteGroup', $group->getKey())->assertSee('Representation group deleted successfully.')->assertSee('No representation groups yet');
     expect(RepresentationGroup::query()->count())->toBe(0)
         ->and(scopeAudit('election.scope_group_deleted')->first()->election_id)->toBe($election->id);
 });
@@ -476,9 +478,12 @@ test('the form explains validation problems in plain words', function () {
 
     scopePage($election)->set('name', '')->call('save')->assertHasErrors(['name' => 'required'])->assertSee('Enter a group name.');
     scopePage($election)->set('name', str_repeat('n', 256))->set('dimensions', [['key' => 'dimension_a', 'values' => 'x']])->call('save')->assertHasErrors(['name' => 'max']);
-    scopePage($election)->set('name', 'G')->set('dimensions', [['key' => 'Bad Key!', 'values' => 'x']])->call('save')
-        ->assertHasErrors(['dimensions.0.key' => 'regex'])->assertSee('Use lowercase letters, numbers and underscores');
-    scopePage($election)->set('name', 'G')->set('dimensions', [['key' => '', 'values' => 'x']])->call('save')->assertHasErrors(['dimensions.0.key' => 'required']);
+    scopePage($election)->set('name', 'G')->set('dimensions', [['key' => str_repeat('a', 81), 'values' => 'x']])->call('save')
+        ->assertHasErrors(['dimensions.0.key' => 'max'])->assertSee('A category name may have at most 80 characters.');
+    scopePage($election)->set('name', 'G')->set('dimensions', [['key' => '', 'values' => 'x']])->call('save')
+        ->assertHasErrors(['dimensions.0.key' => 'required'])->assertSee('Enter a category name using letters or numbers.');
+    scopePage($election)->set('name', 'G')->set('dimensions', [['key' => '!!! ???', 'values' => 'x']])->call('save')
+        ->assertHasErrors(['dimensions.0.key' => 'required']); // nothing left to build a key from
     scopePage($election)->set('name', 'G')->set('dimensions', [['key' => 'dimension_a', 'values' => " \n "]])->call('save')->assertHasErrors(['dimensions.0.values' => 'required']);
     scopePage($election)->set('name', 'G')->set('dimensions', [['key' => 'dimension_a', 'values' => str_repeat('v', 10001)]])->call('save')
         ->assertHasNoErrors() // no artificial form cap: the service enforces the per-value limit and explains it
@@ -487,16 +492,75 @@ test('the form explains validation problems in plain words', function () {
     expect(RepresentationGroup::query()->count())->toBe(0);
 });
 
-test('the same dimension key twice (in any case) is a validation error, not a server error', function () {
+test('the same category name twice (after normalization) is a validation error, not a server error', function () {
     $election = scopeDraft();
 
-    scopePage($election)->set('name', 'G')
-        ->set('dimensions', [['key' => 'dimension_a', 'values' => 'x'], ['key' => ' Dimension_A ', 'values' => 'y']])
-        ->call('save')
-        ->assertHasErrors(['dimensions.0.key' => 'distinct'])
-        ->assertSee('Each dimension key can be used only once');
+    foreach ([' dimension a ', 'DIMENSION-A', 'Dimension_A', 'dimension   a'] as $variant) {
+        scopePage($election)->set('name', 'G')
+            ->set('dimensions', [['key' => 'Dimension A', 'values' => 'x'], ['key' => $variant, 'values' => 'y']])
+            ->call('save')
+            ->assertHasErrors(['dimensions.0.key' => 'distinct'])
+            ->assertSee('Each category name must be unique within this group.');
+    }
 
     expect(RepresentationGroup::query()->count())->toBe(0);
+});
+
+test('readable category names become internal keys automatically and the form keeps what was typed', function () {
+    $election = scopeDraft();
+
+    $page = scopePage($election)->set('name', 'Key group')->set('dimensions', [
+        ['key' => 'Representation Type', 'values' => 'one'],
+        ['key' => '  Academic   Category ', 'values' => 'two'],
+        ['key' => '2nd Level', 'values' => 'three'],
+        ['key' => 'Año Étude', 'values' => 'four'],
+        ['key' => 'Bad Key!', 'values' => 'five'],
+    ])->call('save')->assertHasNoErrors();
+
+    expect(RepresentationGroup::query()->sole()->scope_definition_json)->toBe([
+        'academic_category' => ['two'], 'ano_etude' => ['four'], 'bad_key' => ['five'], 'category_2nd_level' => ['three'], 'representation_type' => ['one'],
+    ]);
+
+    // A failed save must not replace what the administrator typed with the technical key.
+    $failed = scopePage($election)->set('name', '')->set('dimensions', [['key' => 'Representation Type', 'values' => 'x']])->call('save');
+    expect($failed->get('dimensions'))->toBe([['key' => 'Representation Type', 'values' => 'x']]);
+});
+
+test('saved keys are shown as readable names in the list and when editing, and are saved back unchanged', function () {
+    $election = scopeDraft();
+    // Keys as an earlier version (or a direct service call) could have stored them, including shapes a label cannot reproduce.
+    $group = app(ElectionScopeService::class)->createGroup($this->admin, $election, 'Stored group', [
+        'representation_type' => ['value one', 'Value Two'], 'a__b' => ['x'], 'a_b' => ['y'], 'trailing_' => ['z'], 'item_2' => ['w'],
+    ]);
+    $before = DB::table('representation_groups')->where('id', $group->getKey())->value('scope_definition_json');
+
+    $page = scopePage($election);
+    $html = $page->html();
+    expect($html)->toContain('Representation Type')->toContain('Item 2')->toContain('>value one<')->toContain('>Value Two<')->not->toContain('representation_type');
+
+    $page->call('editGroup', $group->getKey());
+    expect(array_column($page->get('dimensions'), 'key'))->toContain('Representation Type')->toContain('Item 2')
+        ->and(array_column($page->get('dimensions'), 'key'))->toHaveCount(5)->and(count(array_unique(array_column($page->get('dimensions'), 'key'))))->toBe(5);
+
+    $page->call('save')->assertHasNoErrors()->assertSee('Changes saved successfully.');
+    expect(DB::table('representation_groups')->where('id', $group->getKey())->value('scope_definition_json'))->toBe($before)
+        ->and($group->fresh()->scope_definition_json)->toHaveKeys(['representation_type', 'a__b', 'a_b', 'trailing_', 'item_2']);
+
+    // Renaming a category on the form really does change its stored key; untouched ones keep theirs.
+    $rows = $page->call('editGroup', $group->getKey())->get('dimensions');
+    $index = array_search('Representation Type', array_column($rows, 'key'), true);
+    $rows[$index]['key'] = 'Renamed Category';
+    $page->set('dimensions', $rows)->call('save')->assertHasNoErrors();
+    $keys = array_keys($group->fresh()->scope_definition_json);
+    expect($keys)->toContain('renamed_category')->toContain('a__b')->not->toContain('representation_type');
+});
+
+test('the map of saved keys cannot be changed from the browser', function () {
+    $election = scopeDraft();
+    $page = scopePage($election);
+
+    expect(fn () => $page->set('storedKeys', ['Anything' => 'a__b']))->toThrow(Exception::class)
+        ->and($page->get('storedKeys'))->toBe([]);
 });
 
 test('too many dimensions, and rows forged into the wrong shape, are handled', function () {
@@ -601,7 +665,7 @@ test('deleting twice (a double click) is a message, not an error page', function
     $election = scopeDraft();
     $group = scopeGroup($election);
 
-    $page = scopePage($election)->call('deleteGroup', $group->getKey())->assertSee('Representation group deleted.');
+    $page = scopePage($election)->call('deleteGroup', $group->getKey())->assertSee('Representation group deleted successfully.');
     $page->call('deleteGroup', $group->getKey());
 
     expect($page->get('problem'))->toContain('no longer exists')->and(RepresentationGroup::query()->count())->toBe(0);
@@ -634,9 +698,9 @@ test('a non-draft election shows its scope read-only, with no form and no action
     $this->actingAs($this->admin, 'admin');
     $html = $this->get(route('admin.elections.scope', $election->id))->assertOk()->getContent();
 
-    expect($html)->toContain('Saved group')->toContain('one, two')->toContain('shown read-only')
+    expect($html)->toContain('Saved group')->toContain('>one<')->toContain('>two<')->toContain('shown read-only')
         ->not->toContain('wire:submit')->not->toContain('Create representation group')
-        ->not->toMatch('/wire:click="(editGroup|deleteGroup|addDimension)/');
+        ->not->toMatch('/wire:click="(editGroup|deleteGroup|confirmDelete|addDimension|addValue|removeValue|editValue)/');
 
     $empty = scopeDraft('Empty');
     scopeSetState($empty, 'LOCKED');
@@ -657,6 +721,253 @@ test('the page exposes no personal data and uses valid icons', function () {
     }
 });
 
+// ---------------------------------------------------------------------------------------------- adding values as tags
+
+test('values are added one at a time, shown as tags, and still saved as the same list of text values', function () {
+    $election = scopeDraft();
+
+    $page = scopePage($election)->set('name', 'Tag group')->set('dimensions.0.key', 'Tag Category')
+        ->set('drafts.0', '  first value ')->call('addValue', 0)
+        ->assertHasNoErrors()->assertSet('drafts.0', '')
+        ->set('drafts.0', 'second value')->call('addValue', 0);
+
+    expect($page->get('dimensions.0.values'))->toBe("first value\nsecond value");
+    $html = $page->html();
+    expect($html)->toContain('>first value<')->toContain('>second value<')->toContain('2 values')
+        ->toContain('Remove value: first value')->toContain('Edit value: first value')->toContain('wire:keydown.enter.prevent="addValue(0)"');
+    expect(DB::table('representation_groups')->count())->toBe(0); // adding a tag saves nothing
+
+    $page->call('save')->assertHasNoErrors();
+    expect(RepresentationGroup::query()->sole()->scope_definition_json)->toBe(['tag_category' => ['first value', 'second value']]);
+});
+
+test('tags can be removed and edited before saving', function () {
+    $election = scopeDraft();
+    $page = scopePage($election)->set('dimensions.0.key', 'Tags')->set('dimensions.0.values', "one\ntwo\nthree");
+
+    $page->call('removeValue', 0, 1);
+    expect($page->get('dimensions.0.values'))->toBe("one\nthree");
+
+    $page->call('editValue', 0, 0)->assertSet('drafts.0', 'one');
+    expect($page->get('dimensions.0.values'))->toBe('three');
+    $page->set('drafts.0', 'one, corrected')->call('addValue', 0);
+    expect($page->get('dimensions.0.values'))->toBe("three\none, corrected");
+
+    // Out-of-range positions change nothing and raise nothing.
+    $page->call('removeValue', 0, 99)->call('editValue', 0, 99)->call('removeValue', 7, 0)->call('addValue', 7);
+    expect($page->get('dimensions.0.values'))->toBe("three\none, corrected");
+
+    // Editing a tag while something else is being typed does not throw that text away.
+    $page->set('drafts.0', 'typing')->call('editValue', 0, 0)->assertHasErrors('drafts.0')->assertSee('Add or clear the value you are typing');
+    expect($page->get('drafts.0'))->toBe('typing')->and($page->get('dimensions.0.values'))->toBe("three\none, corrected");
+});
+
+test('an empty, duplicate, over-long or over-numerous tag is refused with a plain message and changes nothing', function () {
+    $election = scopeDraft();
+    $page = scopePage($election)->set('dimensions.0.key', 'Tags')->set('dimensions.0.values', 'kept');
+
+    $page->set('drafts.0', '   ')->call('addValue', 0)->assertHasErrors('drafts.0')->assertSee('Type a value first, then choose Add.');
+    $page->set('drafts.0', 'kept')->call('addValue', 0)->assertHasErrors('drafts.0')->assertSee('That value is already in this category.');
+    $page->set('drafts.0', str_repeat('x', 256))->call('addValue', 0)->assertHasErrors('drafts.0')->assertSee('A value may have at most 255 characters.');
+    $page->set('drafts.0', "bad\u{0007}value")->call('addValue', 0)->assertHasErrors('drafts.0')->assertSee('A value cannot contain control characters.');
+    expect($page->get('dimensions.0.values'))->toBe('kept');
+
+    $page->set('dimensions.0.values', implode("\n", array_map(fn ($i) => "v{$i}", range(1, 100))))->set('drafts.0', 'one more')->call('addValue', 0)
+        ->assertHasErrors('drafts.0')->assertSee('A category can have at most 100 values.');
+    expect(substr_count($page->get('dimensions.0.values'), "\n"))->toBe(99);
+
+    // A successful add clears an earlier message.
+    $page->set('dimensions.0.values', 'kept')->set('drafts.0', 'fresh')->call('addValue', 0)->assertHasNoErrors();
+});
+
+test('a pasted block adds one tag per line, and a value typed but not added is not lost on save', function () {
+    $election = scopeDraft();
+
+    $page = scopePage($election)->set('dimensions.0.key', 'Pasted')->set('drafts.0', "alpha\n\nbeta\r\nalpha")->call('addValue', 0);
+    expect($page->get('dimensions.0.values'))->toBe("alpha\nbeta");
+
+    $page->set('name', 'Pending group')->set('drafts.0', 'typed last')->call('save')->assertHasNoErrors();
+    expect(RepresentationGroup::query()->sole()->scope_definition_json)->toBe(['pasted' => ['alpha', 'beta', 'typed last']]);
+
+    // A pending value that is not valid stops the save, with the message on its input and nothing written.
+    $page = scopePage($election)->set('name', 'Other group')->set('dimensions', [['key' => 'Other', 'values' => 'x']])->set('drafts', [str_repeat('y', 300)])->call('save');
+    $page->assertHasErrors('drafts.0');
+    expect(RepresentationGroup::query()->count())->toBe(1);
+});
+
+test('removing a category moves the typed text of the others with them, and rows stay in step', function () {
+    $election = scopeDraft();
+
+    $page = scopePage($election)->call('addDimension')->call('addDimension')
+        ->set('dimensions.0.key', 'First')->set('dimensions.1.key', 'Second')->set('dimensions.2.key', 'Third')
+        ->set('drafts.0', 'draft one')->set('drafts.1', 'draft two')->set('drafts.2', 'draft three');
+
+    $page->call('removeDimension', 1);
+    expect(array_column($page->get('dimensions'), 'key'))->toBe(['First', 'Third'])->and($page->get('drafts'))->toBe(['draft one', 'draft three']);
+
+    $page->call('removeDimension', 0)->call('removeDimension', 0);
+    expect($page->get('dimensions'))->toBe([['key' => '', 'values' => '']])->and(count($page->get('drafts')))->toBe(1);
+});
+
+test('forged draft shapes are harmless', function () {
+    $election = scopeDraft();
+    $page = scopePage($election)->set('dimensions.0.key', 'Tags')->set('drafts', [['not', 'text']])->call('addValue', 0)->assertHasErrors('drafts.0');
+    expect($page->get('dimensions.0.values'))->toBe('');
+});
+
+// ---------------------------------------------------------------------------------------------- feedback, editing state, delete dialog
+
+test('saving reports success through a toast event and a status line only after the service finished', function () {
+    $election = scopeDraft();
+
+    $page = scopePage($election)->set('name', '')->call('save')->assertHasErrors('name');
+    $page->assertNotDispatched('election-notice');
+    expect($page->get('status'))->toBeNull();
+
+    $page = scopePage($election)->set('name', 'Notified')->set('dimensions', [['key' => 'Cat', 'values' => 'v']])->call('save')
+        ->assertDispatched('election-notice', type: 'success', message: 'Representation group created successfully.')
+        ->assertDispatched('election-form-clean');
+    expect($page->get('status'))->toBe('Representation group created successfully.');
+
+    $html = $page->html();
+    expect($html)->toContain('role="status"')->toContain('aria-live="polite"')->toContain('x-on:election-notice.window')->toContain('motion-reduce')->toContain('aria-hidden="true"');
+
+    $group = RepresentationGroup::query()->sole();
+    scopePage($election)->call('editGroup', $group->getKey())->set('name', 'Notified again')->call('save')
+        ->assertDispatched('election-notice', type: 'success', message: 'Changes saved successfully.');
+
+    // A service refusal is a message, never a success toast.
+    $page = scopePage($election)->set('name', 'notified again')->set('dimensions', [['key' => 'Cat', 'values' => 'v']])->call('save');
+    $page->assertNotDispatched('election-notice');
+    expect($page->get('problem'))->toBe(ElectionScopeService::MSG_DUPLICATE_NAME)->and($page->get('status'))->toBeNull();
+});
+
+test('the form shows the saving state, the unsaved-changes warning and the editing state, and keeps input after a failed save', function () {
+    $election = scopeDraft();
+    $group = scopeGroup($election, 'Editable group', ['dimension_a' => ['one']]);
+
+    $html = scopePage($election)->html();
+    expect($html)->toContain('Saving...')->toContain('wire:loading.attr="disabled"')->toContain('Unsaved changes')->toContain('beforeunload')->toContain('livewire:navigate')
+        ->not->toContain('Editing')->not->toContain('Being edited');
+
+    $page = scopePage($election)->call('editGroup', $group->getKey())->assertDispatched('election-form-clean');
+    $html = $page->html();
+    expect($html)->toContain('Editing')->toContain('Editable group')->toContain('Edit representation group')->toContain('Being edited')->toContain('Save changes')->toContain('Cancel');
+    expect(fn () => $page->set('editingGroupName', 'x'))->toThrow(Exception::class, 'Cannot update locked property');
+
+    $page->set('name', '')->set('dimensions', [['key' => 'Kept Category', 'values' => 'kept value']])->call('save')
+        ->assertHasErrors('name')->assertSet('editingGroupId', $group->getKey())->assertSet('dimensions', [['key' => 'Kept Category', 'values' => 'kept value']]);
+
+    $page->call('cancelEdit')->assertSet('editingGroupId', null)->assertSet('name', '')->assertDontSee('Being edited');
+    expect($group->fresh()->name)->toBe('Editable group');
+});
+
+test('switching to another saved group is guarded by the page-wide unsaved-changes state', function () {
+    $election = scopeDraft();
+    $first = scopeGroup($election, 'First saved');
+    $second = scopeGroup($election, 'Second saved');
+
+    $html = scopePage($election)->call('editGroup', $first->getKey())->html();
+
+    // One dirty flag at the page root sees both the form and the saved cards.
+    expect($html)->toContain('guardSwitch(event)')->toContain('x-on:click.capture="guardSwitch($event)"')
+        ->toContain('Discard them and open this group for editing?')
+        ->and($html)->toMatch('/wire:click="editGroup\('.$first->id.'\)"[^>]*data-switch-record/')->toMatch('/wire:click="editGroup\('.$second->id.'\)"[^>]*data-switch-record/');
+
+    // The guard is not on Delete (a separate confirmation dialog) and the form no longer owns the dirty state.
+    expect($html)->not->toMatch('/wire:click="confirmDelete\([0-9]+\)"[^>]*data-switch-record/')->not->toMatch('/<form[^>]*x-data/');
+
+    // Server side, loading a record is still a plain action: it replaces the form and tells the page it is clean again.
+    $page = scopePage($election)->call('editGroup', $first->getKey())->set('name', 'Half typed')->call('editGroup', $second->getKey())
+        ->assertSet('editingGroupId', $second->getKey())->assertSet('name', 'Second saved')->assertDispatched('election-form-clean');
+    expect($first->fresh()->name)->toBe('First saved');
+});
+
+test('delete asks first, names the group, and reports only after the transaction succeeded', function () {
+    $election = scopeDraft();
+    $keep = scopeGroup($election, 'Keep me');
+    $gone = scopeGroup($election, 'Delete me');
+
+    $page = scopePage($election)->call('confirmDelete', $gone->getKey());
+    expect($page->get('showDeleteDialog'))->toBeTrue()->and($page->get('confirmingDeleteId'))->toBe($gone->id)->and(RepresentationGroup::query()->count())->toBe(2);
+    $html = $page->html();
+    expect($html)->toContain('Delete this representation group?')->toContain('Delete me')->toContain('Deletion is blocked when a contest already uses the group')
+        ->toContain('wire:click="deleteGroup('.$gone->id.')"');
+    $page->assertNotDispatched('election-notice');
+
+    $page->call('deleteGroup', $gone->getKey())
+        ->assertDispatched('election-notice', type: 'success', message: 'Representation group deleted successfully.')
+        ->assertSet('showDeleteDialog', false)->assertSet('confirmingDeleteId', null);
+    expect(RepresentationGroup::query()->pluck('id')->all())->toBe([$keep->id]);
+
+    expect(fn () => $page->set('confirmingDeleteId', $keep->id))->toThrow(Exception::class, 'Cannot update locked property');
+});
+
+test('a group used by a contest never reaches the delete dialog, and a failed delete closes it with a message', function () {
+    $election = scopeDraft();
+    $group = scopeGroup($election, 'Protected');
+    scopeContest($election, $group);
+
+    $page = scopePage($election);
+    expect($page->html())->not->toContain('wire:click="confirmDelete('.$group->id.')"')->toContain('it cannot be deleted. You can still edit it.');
+
+    $page->call('confirmDelete', $group->getKey());
+    expect($page->get('showDeleteDialog'))->toBeFalse()->and($page->get('problem'))->toBe(ElectionScopeService::MSG_IN_USE);
+
+    $page->call('deleteGroup', $group->getKey())->assertNotDispatched('election-notice')->assertSet('showDeleteDialog', false);
+    expect($page->get('problem'))->toBe(ElectionScopeService::MSG_IN_USE)->and(RepresentationGroup::query()->count())->toBe(1);
+});
+
+test('delete confirmation refuses foreign groups and elections that stopped being editable', function () {
+    $mine = scopeDraft('Mine');
+    $theirs = scopeDraft('Theirs');
+    $foreign = scopeGroup($theirs, 'Foreign group');
+    $own = scopeGroup($mine, 'Own group');
+
+    $page = scopePage($mine)->call('confirmDelete', $foreign->getKey());
+    expect($page->get('showDeleteDialog'))->toBeFalse()->and($page->get('problem'))->toContain('no longer exists')->and($page->html())->not->toContain('Foreign group');
+
+    scopeSetState($mine, 'READY');
+    $page->call('confirmDelete', $own->getKey());
+    expect($page->get('problem'))->toBe(ElectionScopeService::MSG_NOT_EDITABLE)->and($page->get('showDeleteDialog'))->toBeFalse()->and(RepresentationGroup::query()->count())->toBe(2);
+});
+
+test('saved groups are cards with readable categories, tags and the number of contests using them, and no internal keys', function () {
+    $election = scopeDraft();
+    $group = scopeGroup($election, 'Card group', ['representation_type' => ['value one', 'value two'], 'second_category' => ['value three']]);
+    scopeContest($election, $group);
+    scopeGroup($election, 'Unused group', ['unused_category' => ['u']]);
+
+    $html = scopePage($election)->html();
+    expect($html)->toContain('Card group')->toContain('Representation Type')->toContain('Second Category')->toContain('>value one<')->toContain('>value three<')
+        ->toContain('1 contest assigned')->toContain('0 contests assigned')
+        ->toContain('wire:click="confirmDelete(')->toContain('wire:click="editGroup(')
+        ->not->toContain('representation_type')->not->toContain('second_category')->not->toContain('Dimension key');
+
+    // The same group in a read-only election: cards without actions.
+    scopeSetState($election, 'READY');
+    $html = scopePage($election)->html();
+    expect($html)->toContain('Card group')->toContain('>value two<')->toContain('Read-only')->not->toContain('Editable draft')->not->toContain('confirmDelete')->not->toContain('wire:click="editGroup(');
+});
+
+test('the page explains the four steps and that groups do not set eligibility', function () {
+    $html = scopePage(scopeDraft())->html();
+
+    expect($html)->toContain('Give the representation group a recognizable name.')->toContain('Add the categories that describe the group.')
+        ->toContain('Add the values that belong to each category.')->toContain('Assign the group to related contests later.')
+        ->toContain('they do not set voter or candidate eligibility')->toContain('Group name')->toContain('Category name')->toContain('Values');
+});
+
+test('saving through the tag interface changes no stored shape: the stored contract is an object of key to a list of text', function () {
+    $election = scopeDraft();
+
+    scopePage($election)->set('name', 'Contract group')->set('dimensions.0.key', '3rd Category')->set('drafts.0', 'x')->call('addValue', 0)->set('drafts.0', 'y')->call('addValue', 0)->call('save')->assertHasNoErrors();
+
+    $raw = DB::table('representation_groups')->value('scope_definition_json');
+    expect(json_decode($raw, true))->toBe(['category_3rd_category' => ['x', 'y']])
+        ->and(array_is_list(json_decode($raw, true)['category_3rd_category']))->toBeTrue();
+});
+
 // ---------------------------------------------------------------------------------------------- the workspace
 
 test('the election workspace links to the scope page and shows the scope summary', function () {
@@ -664,7 +975,7 @@ test('the election workspace links to the scope page and shows the scope summary
     $this->actingAs($this->admin, 'admin');
 
     $html = Volt::test('admin.elections.show', ['election' => $election])->html();
-    expect($html)->toContain('Configure scope')->toContain('href="'.route('admin.elections.scope', $election->id).'"')
+    expect($html)->toContain('Configure representation groups')->toContain('href="'.route('admin.elections.scope', $election->id).'"')
         ->toContain('No representation groups yet')->not->toContain('Not configured yet');
 
     scopeGroup($election, 'One');
@@ -673,7 +984,7 @@ test('the election workspace links to the scope page and shows the scope summary
 
     scopeSetState($election, 'READY');
     $html = Volt::test('admin.elections.show', ['election' => $election])->html();
-    expect($html)->toContain('View scope')->not->toContain('Configure scope')->toContain('href="'.route('admin.elections.scope', $election->id).'"');
+    expect($html)->toContain('View representation groups')->not->toContain('Configure representation groups')->toContain('href="'.route('admin.elections.scope', $election->id).'"');
 });
 
 test('the workspace button follows the policy: no editing links once a version is frozen', function () {
@@ -681,7 +992,7 @@ test('the workspace button follows the policy: no editing links once a version i
     DB::table('election_config_versions')->where('id', $election->current_config_version_id)->update(['status' => 'SNAPSHOTTED', 'config_json' => json_encode(['frozen' => true])]);
 
     $this->actingAs($this->admin, 'admin');
-    expect(Volt::test('admin.elections.show', ['election' => $election])->html())->toContain('View scope')->not->toContain('Configure scope');
+    expect(Volt::test('admin.elections.show', ['election' => $election])->html())->toContain('View representation groups')->not->toContain('Configure representation groups');
 });
 
 // ---------------------------------------------------------------------------------------------- scope of the change

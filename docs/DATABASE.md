@@ -6,11 +6,13 @@ Implementation status:
 - **Phase 01A** — architecture approved.
 - **Phase 01B** — migration implementation complete; database integrity hardening implemented.
 - **Phase 01B verification** — canonical local MariaDB 10.4.32 integrity verification: **76 passed / 0 failed**.
-- **Phase 01C** — database integrity testing is the active phase. Phase 01C design is approved; **implementation has not yet started**.
+- **Phase 01C** — database integrity testing is the active phase. Earlier documentation describes the Phase 01C design as approved. However, its standalone approval and transaction/security decision record has not been recovered, so the approval scope remains unverified. The D3 Domain B identifier schema change is implemented and verified on MariaDB 10.4.32 (see Section 14); the ballot writer and runtime UUIDv4 generation remain future work. Verification artifacts, scope and decisions are tracked in `docs/PHASE01C_VERIFICATION_REGISTER.md` and `docs/PHASE01C_SCOPE_AND_DECISIONS.md`. **Phase 01C is not complete.**
 
 This document is the approved database architecture baseline derived from the completed Phase 1A domain model review. It defines the intended MySQL domain structure, relationships, integrity boundaries, immutability rules, ballot-secrecy boundary, and migration order.
 
 Laravel migrations are the executable schema source of truth (established in Phase 01B). If an implementation detail differs from this document, the discrepancy must be reviewed rather than silently changing the architecture.
+
+**Terminology note.** In this document, **Domain A** (voter identity) and **Domain B** (anonymous ballot lifecycle) refer only to the ballot-secrecy boundary defined in Section 7. The letters C, D and E in the headings of Sections 4 to 6 are legacy structural groupings of tables; they do not denote secrecy domains.
 
 \---
 
@@ -43,22 +45,11 @@ Phase 01B integrity verification evidence:
 
 Database integrity, concurrency, security, and reconciliation testing is in progress.
 
-The Phase 01C design and transaction/security decisions are approved. A substantial portion of the Phase 01C verification harness has now been implemented and exercised.
+Earlier text of this document recorded that the Phase 01C design and transaction/security decisions were approved and that a substantial part of an expanded verification harness had been implemented and exercised, with specific pass counts, concurrency cases, database-role checks and seeded-corruption reconciliation. **None of those artifacts or results is supported by anything in the repository.** A search of the repository history, branches, stashes and the owner's Project and Downloads folders did not find them. They are therefore classified as **not found in searched locations (further recovery remains possible)** and **unverified**, and the historical pass counts are **not restated here as results**. ZIP archives and sibling worktrees have not been exhaustively searched. No standalone record of the approved design decisions was found either.
 
-Verified so far:
+What is verified for Phase 01C is the D3 work and the Phase 01B regression harness (see below and `docs/PHASE01C_PATCH_STATUS.md`). The full artifact-by-artifact status is in `docs/PHASE01C_VERIFICATION_REGISTER.md`; scope and decisions (including the deferred decisions D-1 to D-4) are in `docs/PHASE01C_SCOPE_AND_DECISIONS.md`; a PROPOSED, UNVERIFIED Domain A / Domain B privilege matrix is in `docs/PHASE01C_PRIVILEGE_MATRIX.md`.
 
-- Phase 01C baseline: **23 passed / 0 failed**.
-- Extended Phase 01C suite: **56 passed / 0 failed**.
-- Reconciliation oracles: **11 passed / 0 failed**.
-- Phase 01B regression verification was re-confirmed during the Phase 01C verification sequence.
-- The full Phase 01C verification sequence was executed twice with identical results.
-- Concurrency cases include duplicate-submission races, forced deadlock behavior, blocking close/vote behavior, and stale-read canary behavior.
-- Database-role security checks include real MariaDB privilege enforcement.
-- Reconciliation testing includes clean fixtures and deliberately seeded corruption cases.
-
-The expanded Phase 01C verification work was exercised on MariaDB 10.11.14 in the verification environment.
-
-**Important:** MariaDB 10.4.32 remains a required Phase 01C completion gate for the expanded Phase 01C suite. The 10.11.14 results are verification evidence but do not replace the required MariaDB 10.4.32 gate.
+**Important:** MariaDB 10.4.32 remains a required Phase 01C completion gate. Any newly developed expanded verification suite must be tested on MariaDB 10.4.32 (decision D-5). Results from other MariaDB versions are exploratory and do not replace that gate.
 
 The approved Phase 01C D3 identifier correction has been implemented:
 
@@ -200,7 +191,7 @@ Key fields:
 
 \---
 
-**## 3. Domain B — election configuration and snapshots**
+**## 3. Election configuration and snapshots**
 
 **### \`elections\`**
 
@@ -474,7 +465,7 @@ Required properties:
 
 \- \`ballot_structure_snapshot_id\` FK.
 
-\- current opaque ULID/ballot identifier. The approved Phase 01C D3 correction will change this identifier to UUIDv4 before Phase 01C implementation is finalized (see Section 14).
+\- opaque ballot identifier: `CHAR(36)` with a database CHECK (`chk_ballots_id_uuidv4`) requiring the lowercase UUIDv4 shape, introduced by the Phase 01C D3 migration (shape only; no identifier generator exists yet; verified on MariaDB 10.4.32; see Section 14).
 
 \- \`cast_at\`.
 
@@ -512,7 +503,7 @@ Fields:
 
 There is no domain \`SKIP\` state.
 
-Identifier note: \`ballot_contest_responses.id\` is currently a ULID (Phase 01B); the approved Phase 01C D3 correction will change it to UUIDv4 (see Section 14).
+Identifier note: \`ballot_contest_responses.id\` is \`CHAR(36)\` with the lowercase-UUIDv4 CHECK \`chk_ballot_contest_responses_id_uuidv4\`, introduced by the Phase 01C D3 migration (shape only; verified on MariaDB 10.4.32; see Section 14).
 
 **### \`ballot_candidate_selections\`**
 
@@ -566,7 +557,7 @@ Fields:
 
 It must remain inside the ballot correlation domain and must not contain voter identity fields.
 
-Identifier note: \`ballot_events.id\` is currently a ULID (Phase 01B); the approved Phase 01C D3 correction will change it to UUIDv4 (see Section 14).
+Identifier note: \`ballot_events.id\` is \`CHAR(36)\` with the lowercase-UUIDv4 CHECK \`chk_ballot_events_id_uuidv4\`, introduced by the Phase 01C D3 migration (shape only; verified on MariaDB 10.4.32; see Section 14).
 
 **### \`ballot_dispositions\`**
 
@@ -584,7 +575,7 @@ Original ballot, response, and selection rows are never edited or deleted. Resul
 
 The exact disposition-to-result-run semantics are an implementation-phase decision and must preserve historical reproducibility.
 
-Identifier note: \`ballot_dispositions.id\` is currently a ULID (Phase 01B); the approved Phase 01C D3 correction will change it to UUIDv4 (see Section 14).
+Identifier note: \`ballot_dispositions.id\` is \`CHAR(36)\` with the lowercase-UUIDv4 CHECK \`chk_ballot_dispositions_id_uuidv4\`, introduced by the Phase 01C D3 migration (shape only; verified on MariaDB 10.4.32; see Section 14).
 
 **### \`outbox_events\`**
 
@@ -908,21 +899,29 @@ Use ULIDs for privacy-relevant or externally referenced identifiers such as:
 
 Use auto-increment identifiers where opacity has no security value and internal query/index performance is more important, such as configuration/reference rows and high-volume child selection rows where they are never externally exposed.
 
-**### Current implemented Phase 01B state**
+**### Phase 01B baseline (before the D3 migration)**
 
-- `voter_participations.id` and `submission_attempts.id` remain ULIDs.
-- `ballots.id`, `ballot_contest_responses.id`, `ballot_events.id`, and `ballot_dispositions.id` are currently ULIDs.
+- `voter_participations.id` and `submission_attempts.id` are ULIDs (`CHAR(26)`) and remain so.
+- `ballots.id`, `ballot_contest_responses.id`, `ballot_events.id`, and `ballot_dispositions.id` were ULIDs (`CHAR(26)`) in the Phase 01B migrations. Those six historical migrations are intentionally not edited.
 - Internal auto-increment IDs remain where already designed.
 
-**### APPROVED PHASE 01C D3 CORRECTION — NOT YET IMPLEMENTED**
+**### PHASE 01C D3 — Domain B identifier schema (implemented; verified on MariaDB 10.4.32)**
 
-Change `ballots.id`, `ballot_contest_responses.id`, `ballot_events.id`, and `ballot_dispositions.id` from time-ordered ULIDs to UUIDv4.
-
-`voter_participations.id` and `submission_attempts.id` remain ULIDs.
+migration `2026_11_13_000100_normalize_domain_b_ballot_ids_to_uuidv4` changes the four Domain B primary keys (`ballots.id`, `ballot_contest_responses.id`, `ballot_events.id`, `ballot_dispositions.id`) and their five dependent columns (`ballot_contest_responses.ballot_id`, `ballot_candidate_selections.ballot_contest_response_id`, `ballot_reporting_contexts.ballot_id`, `ballot_events.ballot_id`, `ballot_dispositions.ballot_id`) from `CHAR(26)` to `CHAR(36) NOT NULL`, preserves the five foreign keys that reference them (and the other foreign keys on the affected tables, re-created in their original order), and adds a lowercase-UUIDv4 `CHECK` on each of the four primary keys. `voter_participations.id` and `submission_attempts.id` remain ULIDs.
 
 Rationale: reduce temporal/ordinal correlation risk between Domain A participation records and Domain B ballot records.
 
-Until implemented, the repository schema still uses ULIDs for all six identifiers.
+What this is and is not:
+
+- `CHAR(36)` and the `CHECK` constrain the **shape** of stored values (lowercase UUIDv4: version nibble 4, variant 8/9/a/b). They do **not** generate identifiers; there is no application-side ballot writer or UUID generator yet.
+- The `CHECK` is a database-level guard that holds while check evaluation is enabled (`check_constraint_checks=1` on MariaDB). A privileged session can disable it, so it is not an unconditional security boundary.
+- **Empty-table-only, fail-closed.** The migration changes the schema only when all six Domain B tables (`ballots`, `ballot_contest_responses`, `ballot_candidate_selections`, `ballot_reporting_contexts`, `ballot_events`, `ballot_dispositions`) are empty. If any holds a row it stops, reports every non-empty table with its row count (counts only), and leaves the database unchanged. It never deletes, truncates, overwrites or converts records and never disables foreign-key checks.
+- **Rollback protection.** `down()` applies the same rule: it refuses while any of the six tables holds rows, including ballots created after the migration.
+- **Locking.** A named advisory lock is taken first on one connection that carries every read and schema statement and is released in `finally`. It coordinates migration runs only; it does not stop an application session from inserting a ballot, so run the migration before any ballot writer exists (or in maintenance mode). MariaDB DDL commits implicitly, so the migration is not atomic; an interrupted run on empty tables is resumable.
+
+Verification: the required gate was run on MariaDB 10.4.32 (port 3307, hostname GOBLIN, disposable database `buksu_p1c_throwaway_test`): the D3 refusal and recovery test passed (47 passed, 0 failed), the Phase 01B integrity harness passed (89 passed, 0 failed) and the standalone D3 schema test passed (8 passed, 0 failed), all with exit code 0. **Enforcement of the lowercase-UUIDv4 `CHECK` constraints was verified on MariaDB 10.4.32**: valid lowercase UUIDv4 values were accepted and invalid formats (including ULIDs, wrong version or variant bits and uppercase) were rejected. The four Domain B primary keys and five dependent columns are `CHAR(36) NOT NULL`, Domain A identifiers remain `CHAR(26)` ULIDs, all 12 foreign keys and the required indexes were verified, and all six Domain B tables ended with zero fixture rows. The captured results are recorded in `docs/PHASE01C_PATCH_STATUS.md` and `docs/TEST_PLAN.md`.
+
+Still not done: the application ballot writer and runtime UUIDv4 generation (future work). Populated legacy ballot data is deliberately refused by the migration. **Phase 01C is not complete.**
 
 \---
 

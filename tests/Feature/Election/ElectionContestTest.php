@@ -553,13 +553,43 @@ test('the page renders its empty state and a blank form with nothing preselected
     $election = ctDraft();
 
     $html = ctPage($election)->assertOk()->assertSee('No contests yet')->html();
+    expect($html)->not->toContain('id="contest-review"'); // the review only appears after a valid form was reviewed
 
-    expect($html)->toContain('theme-2k26')->toContain('wire:submit="save"')->toContain('Create contest')
-        ->toContain('Who may vote or stand is decided in a later step')->not->toContain('read-only');
+    expect($html)->toContain('theme-2k26')->toContain('wire:submit="review"')->toContain('Create contest')
+        ->toContain('Who may vote or stand is decided in a later step')
+        ->toContain('Available seats')->toContain('Maximum candidates a voter may select')->toContain('Representation groups page')
+        ->not->toContain('read-only');
 
     $component = ctPage($election);
     expect($component->get('name'))->toBe('')->and($component->get('seatCount'))->toBe('')->and($component->get('selectionLimit'))->toBe('')
         ->and($component->get('votingMethod'))->toBe('')->and($component->get('representationGroupId'))->toBe('')->and($component->get('allowAbstain'))->toBeTrue();
+});
+
+test('the form is organized into plain-language sections with help under each field', function () {
+    $election = ctDraft();
+    $html = ctPage($election)->html();
+
+    expect($html)
+        ->toContain('Contests and voting rules')->toContain('Contest details')->toContain('Voting settings')
+        ->toContain('Contest name')->toContain('Position or office')->toContain('Representation group')
+        ->toContain('Available seats')->toContain('How many seats are being filled in this contest?')
+        ->toContain('Maximum candidates a voter may select')->toContain('These are two separate settings.')
+        ->toContain('How voters can choose')->toContain('Single choice - choose one candidate')->toContain('Multiple choice - choose more than one candidate')
+        ->toContain('Allow voters to abstain')->toContain('When enabled, a voter may choose not to select a candidate in this contest.')
+        ->toContain('This organizes the contest; it does not determine eligibility.')
+        ->toContain('href="'.route('admin.elections.scope', $election->id).'"')
+        ->not->toContain('Position label')->not->toContain('Maximum selections per voter');
+
+    // The option values (and so the stored voting methods) are unchanged by the clearer wording.
+    expect($html)->toContain('value="SINGLE_CHOICE"')->toContain('value="MULTI_CHOICE"');
+});
+
+test('the saved contest list uses the same plain-language labels', function () {
+    $election = ctDraft();
+    ctContest($election, ['name' => 'Listed contest', 'seat_count' => 3, 'selection_limit' => 2, 'allow_abstain' => false]);
+
+    ctPage($election)->assertSee('Listed contest')->assertSee('Available seats')->assertSee('Max. candidate selections')
+        ->assertSee('Abstention allowed')->assertSee('Not allowed')->assertSee('Saved contests and their voting settings.');
 });
 
 test('the page creates, edits and deletes a contest and reports it', function () {
@@ -569,7 +599,7 @@ test('the page creates, edits and deletes a contest and reports it', function ()
     $page = ctFillForm(ctPage($election), ['name' => '  Page contest ', 'representationGroupId' => (string) $group->id, 'allowAbstain' => false])
         ->call('save')
         ->assertHasNoErrors()
-        ->assertSee('Contest created.')->assertSee('Page contest')->assertSee('Page group')->assertSee('Multiple choice')->assertSee('Not allowed');
+        ->assertSee('Contest created successfully.')->assertSee('Page contest')->assertSee('Page group')->assertSee('Multiple choice')->assertSee('Not allowed');
 
     $contest = Contest::query()->sole();
     $rule = ContestRule::query()->sole();
@@ -583,13 +613,13 @@ test('the page creates, edits and deletes a contest and reports it', function ()
         ->assertSet('representationGroupId', (string) $group->id)->assertSet('allowAbstain', false)
         ->set('name', 'Edited contest')->set('votingMethod', 'SINGLE_CHOICE')->set('seatCount', '1')->set('selectionLimit', '1')->set('allowAbstain', true)->set('representationGroupId', '')
         ->call('save')
-        ->assertHasNoErrors()->assertSee('Contest updated.')->assertSee('Edited contest');
+        ->assertHasNoErrors()->assertSee('Changes saved successfully.')->assertSee('Edited contest');
 
     expect($contest->fresh()->name)->toBe('Edited contest')->and($contest->fresh()->representation_group_id)->toBeNull()
         ->and(ContestRule::query()->sole()->voting_method)->toBe('SINGLE_CHOICE')
         ->and(ctAudit('election.contest_updated'))->toHaveCount(1);
 
-    $page->call('deleteContest', $contest->getKey())->assertSee('Contest deleted.')->assertSee('No contests yet');
+    $page->call('deleteContest', $contest->getKey())->assertSee('Contest deleted successfully.')->assertSee('No contests yet');
     expect(Contest::query()->count())->toBe(0)->and(ContestRule::query()->count())->toBe(0)->and(ctAudit('election.contest_deleted'))->toHaveCount(1);
 });
 
@@ -711,7 +741,7 @@ test('deleting twice (a double click) is a message, not an error page', function
     $election = ctDraft();
     $contest = ctContest($election);
 
-    $page = ctPage($election)->call('deleteContest', $contest->getKey())->assertSee('Contest deleted.');
+    $page = ctPage($election)->call('deleteContest', $contest->getKey())->assertSee('Contest deleted successfully.');
     $page->call('deleteContest', $contest->getKey());
 
     expect($page->get('problem'))->toContain('no longer exists')->and(Contest::query()->count())->toBe(0);
@@ -746,7 +776,7 @@ test('a non-draft election shows its contests read-only, with no form and no act
 
     expect($html)->toContain('Saved contest')->toContain('Saved position')->toContain('Multiple choice')->toContain('shown read-only')
         ->not->toContain('wire:submit')->not->toContain('Create contest')
-        ->not->toMatch('/wire:click="(editContest|deleteContest)/');
+        ->not->toMatch('/wire:click="(editContest|deleteContest|confirmDelete|review|backToEdit)/');
 
     $empty = ctDraft('Empty');
     ctSetState($empty, 'LOCKED');
@@ -812,7 +842,8 @@ test('the election workspace links to the contests page and shows the contest co
     $this->actingAs($this->admin, 'admin');
 
     $html = Volt::test('admin.elections.show', ['election' => $election])->html();
-    expect($html)->toContain('Configure contests')->toContain('href="'.route('admin.elections.contests', $election->id).'"')->toContain('No contests yet');
+    expect($html)->toContain('Configure contests')->toContain('href="'.route('admin.elections.contests', $election->id).'"')->toContain('No contests yet')
+        ->toContain('Editable draft')->toContain('Contests')->toContain('Step 2');
 
     ctContest($election, ['name' => 'One']);
     ctContest($election, ['name' => 'Two']);
@@ -821,6 +852,54 @@ test('the election workspace links to the contests page and shows the contest co
     ctSetState($election, 'READY');
     $html = Volt::test('admin.elections.show', ['election' => $election])->html();
     expect($html)->toContain('View contests')->not->toContain('Configure contests')->toContain('href="'.route('admin.elections.contests', $election->id).'"');
+});
+
+test('the workspace shows the current saved counts, the step cards and the separate-stage guidance', function () {
+    $election = ctDraft();
+    $this->actingAs($this->admin, 'admin');
+
+    $html = Volt::test('admin.elections.show', ['election' => $election])->html();
+    expect($html)->toContain('Configuration overview')->toContain('Step 1')->toContain('Step 2')->toContain('No representation groups yet')->toContain('No contests yet')
+        ->toContain('Voter eligibility, candidate eligibility, candidates, ballot rules, scheduling and results are separate configuration stages')
+        ->toContain('Editable draft')->toContain('Configure representation groups')->toContain('Configure contests')
+        ->toContain('Nothing here is a readiness check or an approval.')
+        ->not->toContain('<form')->not->toMatch('/wire:click=|wire:submit/');
+
+    expect(strip_tags($html))->not->toMatch('/\d+\s*%/'); // no invented percentages or scores
+
+    // Counts follow what was saved through the other pages.
+    ctGroup($election, 'Counted group');
+    ctContest($election, ['name' => 'Counted one']);
+    ctContest($election, ['name' => 'Counted two']);
+    $html = Volt::test('admin.elections.show', ['election' => $election])->html();
+    expect($html)->toContain('1 representation group')->toContain('2 contests');
+
+    ctPage($election)->call('deleteContest', Contest::query()->where('name', 'Counted two')->value('id'));
+    expect(Volt::test('admin.elections.show', ['election' => $election])->html())->toContain('1 contest')->not->toContain('2 contests');
+});
+
+test('the workspace offers View actions and the read-only badge when the election is not an editable draft', function () {
+    $election = ctDraft();
+    ctSetState($election, 'READY');
+    $this->actingAs($this->admin, 'admin');
+
+    $html = Volt::test('admin.elections.show', ['election' => $election])->html();
+    expect($html)->toContain('Read-only')->toContain('View representation groups')->toContain('View contests')->not->toContain('Editable draft')
+        ->not->toContain('Configure representation groups')->not->toContain('Configure contests')
+        ->toContain('href="'.route('admin.elections.scope', $election->id).'"')->toContain('href="'.route('admin.elections.contests', $election->id).'"');
+});
+
+test('the workspace has the shared navigation between its three pages, and the other two pages share it', function () {
+    $election = ctDraft();
+    $this->actingAs($this->admin, 'admin');
+
+    foreach (['admin.elections.show', 'admin.elections.scope', 'admin.elections.contests'] as $component) {
+        $html = Volt::test($component, ['election' => $election])->html();
+        expect($html)->toContain('aria-label="Election configuration"')
+            ->toContain('href="'.route('admin.elections.show', $election->id).'"')
+            ->toContain('href="'.route('admin.elections.scope', $election->id).'"')
+            ->toContain('href="'.route('admin.elections.contests', $election->id).'"');
+    }
 });
 
 test('the workspace count ignores contests of other elections and other versions', function () {
@@ -841,6 +920,195 @@ test('the workspace button follows the policy: no editing links once a version i
 
     $this->actingAs($this->admin, 'admin');
     expect(Volt::test('admin.elections.show', ['election' => $election])->html())->toContain('View contests')->not->toContain('Configure contests');
+});
+
+// ---------------------------------------------------------------------------------------------- review, notifications, feedback
+
+test('the review shows exactly what was entered, validates first, and saves nothing', function () {
+    $election = ctDraft();
+    $group = ctGroup($election, 'Review group');
+
+    $page = ctFillForm(ctPage($election), ['name' => '  Review contest ', 'positionLabel' => 'Review office', 'representationGroupId' => (string) $group->id, 'seatCount' => '3', 'selectionLimit' => '5', 'votingMethod' => 'SINGLE_CHOICE', 'allowAbstain' => false])
+        ->call('review')
+        ->assertHasNoErrors()->assertSet('reviewing', true);
+
+    $html = $page->html();
+    expect($html)->toContain('Review before saving')->toContain('Review contest')->toContain('Review office')->toContain('Review group')
+        ->toContain('Single choice - choose one candidate')->toContain('Voters may not abstain')
+        ->toContain('Nothing is saved until you choose Save.')
+        ->toContain('wire:click="save"')->toContain('wire:click="backToEdit"')->not->toContain('wire:submit="review"');
+
+    // The summary reflects the form (seats and the selection limit are shown as separate values, with no relation enforced).
+    expect($html)->toMatch('/Available seats.*?<dd[^>]*>3<\/dd>/s')->toMatch('/Maximum candidates a voter may select.*?<dd[^>]*>5<\/dd>/s');
+
+    expect(Contest::query()->count())->toBe(0)->and(ContestRule::query()->count())->toBe(0)
+        ->and(ctAudit('election.contest_created'))->toHaveCount(0)->and($page->get('status'))->toBeNull();
+    $page->assertNotDispatched('election-notice');
+
+    $page->call('backToEdit')->assertSet('reviewing', false)->assertSet('name', 'Review contest')->assertSet('seatCount', '3')->assertSet('votingMethod', 'SINGLE_CHOICE');
+    expect(Contest::query()->count())->toBe(0);
+
+    $page->call('review')->call('save')->assertSet('reviewing', false)->assertDispatched('election-notice', type: 'success', message: 'Contest created successfully.');
+    expect(Contest::query()->sole()->name)->toBe('Review contest')->and(ContestRule::query()->sole()->selection_limit)->toBe(5);
+});
+
+test('an invalid form is not reviewed: the problems are explained and what was typed stays', function () {
+    $election = ctDraft();
+
+    $page = ctFillForm(ctPage($election), ['name' => 'Kept name', 'positionLabel' => '', 'seatCount' => 'two', 'votingMethod' => ''])
+        ->call('review')
+        ->assertHasErrors(['positionLabel' => 'required', 'seatCount' => 'integer', 'votingMethod' => 'required'])
+        ->assertSet('reviewing', false)->assertSet('name', 'Kept name')->assertSet('seatCount', 'two')
+        ->assertSee('Enter a position label.')->assertSee('Seats must be a whole number.');
+
+    expect(Contest::query()->count())->toBe(0);
+    expect(fn () => $page->set('reviewing', true))->toThrow(Exception::class, 'Cannot update locked property');
+});
+
+test('the review also works when editing, and the contest keeps its identity', function () {
+    $election = ctDraft();
+    $contest = ctContest($election, ['name' => 'Before']);
+
+    $page = ctPage($election)->call('editContest', $contest->getKey())->set('name', 'After')->call('review')->assertSet('reviewing', true)->assertSee('After');
+    expect($contest->fresh()->name)->toBe('Before');
+
+    $page->call('save')->assertDispatched('election-notice', type: 'success', message: 'Changes saved successfully.');
+    expect($contest->fresh()->name)->toBe('After')->and(Contest::query()->count())->toBe(1);
+});
+
+test('success is announced only after the server saved: toast event plus a screen-reader status, never on failure', function () {
+    $election = ctDraft();
+
+    $page = ctFillForm(ctPage($election), ['name' => ''])->call('save')->assertHasErrors('name');
+    $page->assertNotDispatched('election-notice');
+    expect($page->get('status'))->toBeNull();
+
+    $page = ctFillForm(ctPage($election), ['representationGroupId' => '999999'])->call('save');
+    $page->assertNotDispatched('election-notice');
+    expect($page->get('problem'))->toBe(ElectionContestService::MSG_GROUP_NOT_IN_ELECTION)->and($page->get('status'))->toBeNull()->and(Contest::query()->count())->toBe(0);
+
+    $page = ctFillForm(ctPage($election))->call('save')->assertDispatched('election-notice', type: 'success', message: 'Contest created successfully.');
+    expect($page->get('status'))->toBe('Contest created successfully.');
+
+    $html = $page->html();
+    expect($html)->toContain('role="status"')->toContain('aria-live="polite"')->toContain('Contest created successfully.')
+        ->toContain('x-on:election-notice.window')->toContain('motion-reduce');
+});
+
+test('the form shows saving feedback, the unsaved-changes warning and the editing state', function () {
+    $election = ctDraft();
+    $contest = ctContest($election, ['name' => 'Editable one']);
+
+    $html = ctPage($election)->html();
+    expect($html)->toContain('Unsaved changes')->toContain('beforeunload')->toContain('livewire:navigate')->not->toContain('Editing');
+
+    $page = ctPage($election)->call('editContest', $contest->getKey());
+    $html = $page->html();
+    expect($html)->toContain('Editing')->toContain('Editable one')->toContain('Edit contest')->toContain('Being edited')->toContain('Cancel');
+
+    $page->set('name', 'Half edited')->call('review')->assertSee('Save changes')->assertSee('Saving...');
+    $page->call('cancelEdit')->assertSet('editingContestId', null)->assertSet('reviewing', false)->assertSet('name', '')->assertDontSee('Being edited');
+    expect($contest->fresh()->name)->toBe('Editable one');
+});
+
+test('switching to another saved contest is guarded by the page-wide unsaved-changes state', function () {
+    $election = ctDraft();
+    $first = ctContest($election, ['name' => 'First saved']);
+    $second = ctContest($election, ['name' => 'Second saved']);
+
+    $html = ctPage($election)->call('editContest', $first->getKey())->html();
+
+    expect($html)->toContain('guardSwitch(event)')->toContain('x-on:click.capture="guardSwitch($event)"')
+        ->toContain('Discard them and open this contest for editing?')
+        ->and($html)->toMatch('/wire:click="editContest\('.$first->id.'\)"[^>]*data-switch-record/')->toMatch('/wire:click="editContest\('.$second->id.'\)"[^>]*data-switch-record/')
+        ->not->toMatch('/wire:click="confirmDelete\([0-9]+\)"[^>]*data-switch-record/');
+
+    // Also while the review is showing: the Edit buttons of the saved cards remain guarded.
+    $reviewHtml = ctPage($election)->call('editContest', $first->getKey())->set('name', 'Changed')->call('review')->html();
+    expect($reviewHtml)->toContain('guardSwitch(event)')->toMatch('/wire:click="editContest\([0-9]+\)"[^>]*data-switch-record/');
+
+    // Server side, loading a record replaces the form, leaves review mode and tells the page it is clean again.
+    $page = ctPage($election)->call('editContest', $first->getKey())->set('name', 'Half typed')->call('review')->call('editContest', $second->getKey())
+        ->assertSet('editingContestId', $second->getKey())->assertSet('name', 'Second saved')->assertSet('reviewing', false)->assertDispatched('election-form-clean');
+    expect($first->fresh()->name)->toBe('First saved');
+});
+
+test('delete asks first, names the contest, and reports only after the transaction succeeded', function () {
+    $election = ctDraft();
+    $keep = ctContest($election, ['name' => 'Keep me']);
+    $gone = ctContest($election, ['name' => 'Delete me']);
+
+    $page = ctPage($election)->call('confirmDelete', $gone->getKey());
+    expect($page->get('showDeleteDialog'))->toBeTrue()->and($page->get('confirmingDeleteId'))->toBe($gone->id)
+        ->and(Contest::query()->count())->toBe(2);
+    $html = $page->html();
+    expect($html)->toContain('Delete this contest?')->toContain('Delete me')->toContain('Deletion is blocked when the contest already has dependent records')
+        ->toContain('wire:click="deleteContest('.$gone->id.')"');
+    $page->assertNotDispatched('election-notice');
+
+    $page->call('deleteContest', $gone->getKey())
+        ->assertDispatched('election-notice', type: 'success', message: 'Contest deleted successfully.')
+        ->assertSet('showDeleteDialog', false)->assertSet('confirmingDeleteId', null);
+    expect(Contest::query()->pluck('id')->all())->toBe([$keep->id])->and(ctAudit('election.contest_deleted'))->toHaveCount(1);
+
+    expect(fn () => $page->set('confirmingDeleteId', $keep->id))->toThrow(Exception::class, 'Cannot update locked property');
+});
+
+test('a contest with dependent records never reaches the delete dialog, and a failed delete closes it with a message', function () {
+    $election = ctDraft();
+    $contest = ctContest($election, ['name' => 'Protected']);
+    DB::table('contest_eligibility_rules')->insert(['contest_id' => $contest->getKey(), 'rule_definition_json' => json_encode(['synthetic' => true]), 'created_at' => now(), 'updated_at' => now()]);
+
+    $page = ctPage($election);
+    expect($page->html())->not->toContain('wire:click="confirmDelete('.$contest->id.')"')->toContain('cannot be deleted. You can still edit it.');
+
+    $page->call('confirmDelete', $contest->getKey());
+    expect($page->get('showDeleteDialog'))->toBeFalse()->and($page->get('problem'))->toBe(ElectionContestService::MSG_IN_USE);
+
+    $page->call('deleteContest', $contest->getKey())->assertNotDispatched('election-notice')->assertSet('showDeleteDialog', false);
+    expect($page->get('problem'))->toBe(ElectionContestService::MSG_IN_USE)->and(Contest::query()->count())->toBe(1);
+});
+
+test('delete confirmation refuses foreign contests, vanished contests and elections that stopped being editable', function () {
+    $mine = ctDraft('Mine');
+    $theirs = ctDraft('Theirs');
+    $foreign = ctContest($theirs, ['name' => 'Foreign contest']);
+    $own = ctContest($mine, ['name' => 'Own contest']);
+
+    $page = ctPage($mine)->call('confirmDelete', $foreign->getKey());
+    expect($page->get('showDeleteDialog'))->toBeFalse()->and($page->get('problem'))->toContain('no longer exists')->and($page->html())->not->toContain('Foreign contest');
+
+    ctSetState($mine, 'READY');
+    $page->call('confirmDelete', $own->getKey());
+    expect($page->get('problem'))->toBe(ElectionContestService::MSG_NOT_EDITABLE)->and($page->get('showDeleteDialog'))->toBeFalse()->and(Contest::query()->count())->toBe(2);
+});
+
+test('the page adds no new voting rule: any seats, selection limit and method combination the service accepted before is still accepted', function () {
+    $election = ctDraft();
+
+    foreach ([['1', '50', 'SINGLE_CHOICE'], ['10', '1', 'MULTI_CHOICE'], ['100', '100', 'SINGLE_CHOICE']] as $i => [$seats, $limit, $method]) {
+        ctFillForm(ctPage($election), ['name' => "Combination {$i}", 'seatCount' => $seats, 'selectionLimit' => $limit, 'votingMethod' => $method])
+            ->call('review')->assertHasNoErrors()->call('save')->assertHasNoErrors();
+    }
+
+    expect(ContestRule::query()->count())->toBe(3)
+        ->and(ContestRule::query()->orderBy('id')->get()->map(fn ($r) => [$r->seat_count, $r->selection_limit, $r->voting_method])->all())
+        ->toBe([[1, 50, 'SINGLE_CHOICE'], [10, 1, 'MULTI_CHOICE'], [100, 100, 'SINGLE_CHOICE']]);
+});
+
+test('the saved list shows every setting of a contest as a card, and a read-only election offers no actions', function () {
+    $election = ctDraft();
+    $group = ctGroup($election, 'Card group');
+    ctContest($election, ['name' => 'Card contest', 'position_label' => 'Card position', 'representation_group_id' => $group->id, 'seat_count' => 4, 'selection_limit' => 3, 'voting_method' => 'MULTI_CHOICE', 'allow_abstain' => true]);
+
+    $html = ctPage($election)->html();
+    expect($html)->toContain('Card contest')->toContain('Card position')->toContain('Card group')->toContain('Multiple choice')
+        ->toMatch('/Available seats.*?<dd[^>]*>4<\/dd>/s')->toMatch('/Max\. candidate selections.*?<dd[^>]*>3<\/dd>/s')->toContain('Allowed')
+        ->toContain('wire:click="confirmDelete(')->toContain('wire:click="editContest(');
+
+    ctSetState($election, 'READY');
+    $html = ctPage($election)->html();
+    expect($html)->toContain('Card contest')->toContain('Read-only')->not->toContain('Editable draft')->not->toContain('confirmDelete')->not->toContain('wire:click="editContest(');
 });
 
 // ---------------------------------------------------------------------------------------------- scope of the change
@@ -866,4 +1134,154 @@ test('the contest code writes only through the service and ships no institutiona
 
     // The service never writes the `scope` column and never touches the eligibility tables.
     expect(file_get_contents(app_path('Services/Election/ElectionContestService.php')))->not->toMatch("/'scope'\s*=>/");
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// Phase 04D: preset choices 1-10 plus a Custom number for seats and selections.
+// ---------------------------------------------------------------------------------------------------------------
+
+function ctSaveWith($page, array $values)
+{
+    return ctFillForm($page, $values)->call('save');
+}
+
+test('04D: every preset from 1 to 10 sets only its own control and saves', function () {
+    foreach (range(1, 10) as $n) {
+        $election = ctDraft('Preset election '.$n);
+        $page = ctPage($election);
+
+        $page->set('seatChoice', (string) $n)->assertSet('seatCount', (string) $n)->assertSet('selectionLimit', '')->assertSet('selectionChoice', '')
+            ->set('selectionChoice', (string) (11 - $n))->assertSet('selectionLimit', (string) (11 - $n))->assertSet('seatCount', (string) $n);
+
+        $page->set('name', 'P'.$n)->set('positionLabel', 'Pos')->set('votingMethod', 'MULTI_CHOICE')->call('save')->assertHasNoErrors();
+
+        $rule = ContestRule::query()->whereHas('contest', fn ($q) => $q->where('election_id', $election->id))->sole();
+        expect($rule->seat_count)->toBe($n)->and($rule->selection_limit)->toBe(11 - $n);
+    }
+});
+
+test('04D: Custom reveals the numeric input, starts empty and accepts 11 through 100', function () {
+    $election = ctDraft();
+    $page = ctPage($election);
+
+    $page->assertDontSee('Custom number of available seats')
+        ->set('seatChoice', 'custom')->assertSet('seatCount', '')->assertSee('Custom number of available seats')->assertDontSee('Custom maximum number of selections')
+        ->set('selectionChoice', 'custom')->assertSet('selectionLimit', '')->assertSee('Custom maximum number of selections');
+
+    foreach ([11, 12, 50, 99, 100] as $n) {
+        $page->set('seatCount', (string) $n)->assertSet('seatChoice', 'custom')->set('selectionLimit', (string) $n)->assertSet('selectionChoice', 'custom');
+    }
+
+    $page->set('name', 'Big')->set('positionLabel', 'Pos')->set('votingMethod', 'MULTI_CHOICE')->call('save')->assertHasNoErrors();
+    $rule = ContestRule::query()->sole();
+    expect($rule->seat_count)->toBe(100)->and($rule->selection_limit)->toBe(100);
+});
+
+test('04D: Custom keeps accepting a small number typed after choosing Custom', function () {
+    $page = ctPage(ctDraft());
+
+    $page->set('seatChoice', 'custom')->set('seatCount', '3')->assertSet('seatChoice', 'custom')->assertSet('seatCount', '3');
+});
+
+test('04D: existing values above 10 appear as Custom when editing, and presets as presets', function () {
+    $election = ctDraft();
+    $big = ctContest($election, ['name' => 'Big', 'seat_count' => 25, 'selection_limit' => 100]);
+    $small = ctContest($election, ['name' => 'Small', 'position_label' => 'Other', 'seat_count' => 10, 'selection_limit' => 1]);
+    $page = ctPage($election);
+
+    $page->call('editContest', $big->getKey())->assertSet('seatChoice', 'custom')->assertSet('selectionChoice', 'custom')
+        ->assertSet('seatCount', '25')->assertSet('selectionLimit', '100')->assertSee('Custom number of available seats');
+
+    $page->call('editContest', $small->getKey())->assertSet('seatChoice', '10')->assertSet('selectionChoice', '1')
+        ->assertSet('seatCount', '10')->assertSet('selectionLimit', '1')->assertDontSee('Custom number of available seats');
+});
+
+test('04D: editing preserves both stored values when saved untouched', function () {
+    $election = ctDraft();
+    $contest = ctContest($election, ['seat_count' => 30, 'selection_limit' => 7]);
+    $page = ctPage($election);
+
+    $page->call('editContest', $contest->getKey())->set('name', 'Renamed')->call('save')->assertHasNoErrors();
+
+    $rule = $contest->fresh()->rule;
+    expect($rule->seat_count)->toBe(30)->and($rule->selection_limit)->toBe(7);
+});
+
+test('04D: the server rejects 0, 101, negatives and non-integers for both controls even through Custom', function () {
+    $election = ctDraft();
+    $page = ctPage($election);
+
+    foreach (['seatCount' => 'seatChoice', 'selectionLimit' => 'selectionChoice'] as $property => $choice) {
+        $page->set($choice, 'custom');
+
+        foreach (['0' => 'min', '-1' => 'min', '101' => 'max', '1000' => 'max', '2.5' => 'integer', 'abc' => 'integer', '1e1' => 'integer', '' => 'required'] as $value => $rule) {
+            ctSaveWith($page, [$choice => 'custom', $property => (string) $value])->assertHasErrors([$property => $rule]);
+        }
+    }
+
+    expect(Contest::query()->count())->toBe(0);
+});
+
+test('04D: a forged menu choice is ignored and cannot write a value around validation', function () {
+    $page = ctPage(ctDraft());
+
+    $page->set('seatChoice', '5')->set('seatChoice', '11')->assertSet('seatCount', '5')->assertSet('seatChoice', '5')
+        ->set('seatChoice', '999')->assertSet('seatCount', '5')
+        ->set('selectionChoice', '1')->set('selectionChoice', 'x')->assertSet('selectionLimit', '1');
+});
+
+test('04D: the two controls are independent in every direction', function () {
+    $page = ctPage(ctDraft());
+
+    $page->set('seatChoice', '4')->set('selectionChoice', '2')
+        ->set('seatChoice', 'custom')->assertSet('selectionLimit', '2')->assertSet('selectionChoice', '2')
+        ->set('seatCount', '40')->assertSet('selectionLimit', '2')->assertSet('selectionChoice', '2')
+        ->set('selectionChoice', 'custom')->set('selectionLimit', '60')->assertSet('seatCount', '40')->assertSet('seatChoice', 'custom')
+        ->set('selectionChoice', '9')->assertSet('seatCount', '40')->assertSet('selectionLimit', '9')
+        ->set('seatChoice', '')->assertSet('seatCount', '')->assertSet('selectionLimit', '9')->assertSet('selectionChoice', '9');
+});
+
+test('04D: a new contest selects no default and leaving the menus untouched fails validation', function () {
+    $election = ctDraft();
+    $page = ctPage($election);
+
+    $page->assertSet('seatChoice', '')->assertSet('selectionChoice', '')->assertSet('seatCount', '')->assertSet('selectionLimit', '')
+        ->set('name', 'N')->set('positionLabel', 'P')->set('votingMethod', 'MULTI_CHOICE')->call('save')
+        ->assertHasErrors(['seatCount' => 'required', 'selectionLimit' => 'required']);
+
+    expect(Contest::query()->count())->toBe(0);
+});
+
+test('04D: cancelling or finishing a form clears the menus so the next new contest starts blank', function () {
+    $election = ctDraft();
+    $contest = ctContest($election, ['seat_count' => 40, 'selection_limit' => 3]);
+    $page = ctPage($election);
+
+    $page->call('editContest', $contest->getKey())->assertSet('seatChoice', 'custom')->call('cancelEdit')
+        ->assertSet('seatChoice', '')->assertSet('selectionChoice', '')->assertSet('seatCount', '')->assertSet('selectionLimit', '');
+});
+
+test('04D: the preset menus are real labelled selects, not fake buttons', function () {
+    $html = ctPage(ctDraft())->html();
+
+    expect($html)->toContain('wire:model.live="seatChoice"')->toContain('wire:model.live="selectionChoice"')
+        ->toContain('Custom number...')->toContain('Choose a number from 1 to 10, or Custom for any whole number from 1 to 100.')
+        ->toContain('Available seats')->toContain('Maximum candidates a voter may select');
+});
+
+test('04D: the two control cards sit in their grid and the explanation follows it, with balanced wrappers', function () {
+    $source = file_get_contents(resource_path('views/livewire/admin/elections/contests.blade.php'));
+
+    expect(preg_match_all('/<div\b/', $source))->toBe(preg_match_all('/<\/div>/', $source));
+
+    $html = ctPage(ctDraft())->html();
+    $dom = new DOMDocument;
+    @$dom->loadHTML('<?xml encoding="utf-8"?>'.$html);
+    $xpath = new DOMXPath($dom);
+
+    $grid = $xpath->query('//div[contains(@class,"sm:grid-cols-2")][.//select[@*[name()="wire:model.live"]="seatChoice"]]');
+    expect($grid)->toHaveCount(1)
+        ->and($xpath->query('.//select[@*[name()="wire:model.live"]="selectionChoice"]', $grid->item(0)))->toHaveCount(1)
+        ->and($xpath->query('.//*[contains(text(),"These are two separate settings")]', $grid->item(0)))->toHaveCount(0)
+        ->and($xpath->query('following-sibling::p[contains(.,"These are two separate settings")]', $grid->item(0)))->toHaveCount(1);
 });

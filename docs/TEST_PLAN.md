@@ -98,6 +98,47 @@ Expected result:
 
 ```text
 76 passed / 0 failed
+```
+
+The baseline count above is the Phase 01B result as originally recorded. With the Phase 01C D3 additions the script contains further checks (meta-C3 and the `D3-*` checks). Its recorded result on the required MariaDB 10.4.32 gate with the D3 patch applied is **89 passed / 0 failed** (exit code 0); see "Recorded results" below.
+
+## Phase 01C D3 tests (Domain B identifier schema: CHAR(36), lowercase-UUIDv4 CHECKs, fail-closed migration)
+
+Required gate: MariaDB 10.4.32, port 3307, disposable database `buksu_p1c_throwaway_test` only. Never run these against `buksu_comelec2.0`, `buksu_comelec_v2`, `comelec_phase04c_104_test` or any application / Phase 04 database. The destructive scripts refuse unless the database name matches exactly, `ALLOW_DESTRUCTIVE_FIXTURE_CLEANUP=YES` is set, `SELECT DATABASE()` matches, and (for the Phase 01B script) every fixture table is empty. They print the server version, port and hostname and label the server GATE or NON-GATE. `REQUIRE_GATE_SERVER=YES` (opt-in) makes them refuse unless the server is MariaDB 10.4.32 on port 3307; MariaDB 10.11 remains usable as exploratory testing without it. The refusal script additionally requires a **new, empty database (zero tables and views)** and never drops, wipes or truncates existing tables; it checks that the Laravel connection and the mysql client resolve to the same server and database before running Artisan, and at the end verifies that every Phase 01B `FIXTURE_TABLES` table holds zero rows.
+
+| Script | Purpose | Writes data? |
+|---|---|---|
+| `database/verification/phase01c_d3_uuidv4_schema_tests.sh` | D3-01..08: column types, Domain A unchanged, foreign keys, indexes, parent/child compatibility, UUIDv4 CHECKs, `check_constraint_checks`, InnoDB | No (read-only) |
+| `database/verification/phase1b_integrity_tests.sh` | Phase 01B regression (all original checks kept, including A2) plus meta-C3 and `D3-*` checks: valid lowercase UUIDv4 accepted; ULID, wrong version, wrong variant, uppercase and malformed ids rejected by the named CHECK in two sql_modes; dependent columns bound by their foreign keys; session-level CHECK bypass demonstrated as a limitation | Yes (disposable fixtures) |
+| `database/verification/phase01c_d3_refusal_tests.sh` | Refusal on each of the six tables (minimum valid dependency chains, 1 and 2 chains) and on all six together; rollback refusal with post-migration records; lock contention; no-op on a converted populated database; interrupted-run resume; unrecognised-shape stop; the lock is verified released in the same PHP process | Yes (disposable fixtures; parents inserted with foreign-key checks ON, never disabled) |
+
+### Recorded results
+
+Required gate: MariaDB 10.4.32, port 3307, hostname GOBLIN, database `buksu_p1c_throwaway_test` (captured results supplied by the project owner):
+
+| Test | Result | Exit code |
+|---|---|---|
+| `phase01c_d3_refusal_tests.sh` (refusal, rollback protection, lock, resume, recovery) | 47 passed, 0 failed | 0 |
+| `phase1b_integrity_tests.sh` (Phase 01B regression + meta-C3 + `D3-*` checks) | 89 passed, 0 failed | 0 |
+| `phase01c_d3_uuidv4_schema_tests.sh` (D3-01..08) | 8 passed, 0 failed | 0 |
+
+Confirmed: the four Domain B primary keys and five dependent columns are `CHAR(36) NOT NULL`; Domain A identifiers remain `CHAR(26)` ULIDs; all 12 foreign keys and the required indexes passed; the four lowercase-UUIDv4 `CHECK` constraints were verified and invalid UUID formats were rejected on MariaDB 10.4.32; all six Domain B tables finished with zero fixture rows; the refusal script confirmed all 26 Phase 01B fixture tables empty.
+
+Separate regression entry, full Pest suite on SQLite: **494 passed, 1 skipped; 10,113 assertions; 98.41 seconds; exit code 0.** (The D3 migration is a no-op on SQLite, so this entry does not test the MariaDB schema change.)
+
+Limitations that these results do not remove: UUID shape validation is not UUID generation; a session with `check_constraint_checks=0` can bypass the CHECK; the advisory lock does not prevent ordinary application writers; MariaDB DDL is not atomic; populated legacy ballot data is deliberately refused. Phase 01C is **not** complete: the ballot writer and runtime UUIDv4 generation remain future work.
+
+### Phase 01C suites present and not found
+
+| Suite | Status |
+|---|---|
+| `phase1b_integrity_tests.sh`, `phase01c_d3_refusal_tests.sh`, `phase01c_d3_uuidv4_schema_tests.sh` | Present in `database/verification/`; results above (verified on MariaDB 10.4.32, as supplied by the project owner) |
+| Voting concurrency tests (duplicate-submission races, deadlock, vote versus close/pause, stale read) | **Not found in searched locations; further recovery remains possible.** Unverified. |
+| Database-role / privilege tests | Not found in searched locations; further recovery remains possible. Unverified. No role or GRANT definitions exist in the repository. |
+| Reconciliation oracles and seeded-corruption tests | Not found in searched locations; further recovery remains possible. Unverified. |
+| Earlier historical figures for an "expanded Phase 01C suite" | Unsupported by any artifact; not results of the verified record. |
+
+`phase03a_import_concurrency.php` and `phase03a_queue_recovery.php` test student import only and are not Phase 01C voting tests. Any newly developed expanded suite must be tested on MariaDB 10.4.32 (decision D-5). See `docs/PHASE01C_VERIFICATION_REGISTER.md`.
 
 ## Phase 03A tests (student master / Data Center import core)
 All data is synthetic; no real student data is committed. Suites: `tests/Unit/StudentImport/*`, `tests/Feature/Import/*`, plus `database/verification/phase03a_import_concurrency.php`.
