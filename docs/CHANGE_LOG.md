@@ -1,4 +1,4 @@
-# CHANGE LOG
+z# CHANGE LOG
 
 ## 2026-09-26 — Architecture Baseline Planning
 - Established reusable configurable election-engine objective.
@@ -159,7 +159,7 @@ Every material architecture or election-rule change must record date, reason, pr
 * **Not claimed:** what any dimension means or how it is matched (an eligibility-phase decision), versioned scope for exceptional changes, editing in `READY`. See `OPEN_DECISIONS.md` (Election scope configuration).
 
 ## Unreleased — Phase 01C D3: Domain B identifier schema (verified on MariaDB 10.4.32; Phase 01C not complete)
-- **Migration (forward-only):** `2026_11_13_000100_normalize_domain_b_ballot_ids_to_uuidv4` converts `ballots.id`, `ballot_contest_responses.id`, `ballot_events.id`, `ballot_dispositions.id` and the five dependent columns from `CHAR(26)` to `CHAR(36) NOT NULL`, preserves the foreign keys, and adds lowercase-UUIDv4 `CHECK` constraints on the four primary keys. `voter_participations.id` and `submission_attempts.id` remain ULIDs. The six historical `create_ballot*` migrations are unchanged.
+- **Migration (empty-table-only; fail-closed):** `2026_11_13_000100_normalize_domain_b_ballot_ids_to_uuidv4` converts `ballots.id`, `ballot_contest_responses.id`, `ballot_events.id`, `ballot_dispositions.id` and the five dependent columns from `CHAR(26)` to `CHAR(36) NOT NULL`, preserves the foreign keys, and adds lowercase-UUIDv4 `CHECK` constraints on the four primary keys. `voter_participations.id` and `submission_attempts.id` remain ULIDs. The six historical `create_ballot*` migrations are unchanged.
 - **Fail-closed:** runs only when all six Domain B tables are empty; otherwise it stops, reports each non-empty table with its row count, and changes nothing. `down()` refuses while any of the six tables holds rows. A named advisory lock is taken first and released in `finally`.
 - **Scope limits:** shape only (no identifier generation exists); the CHECK is not an unconditional security boundary because a session can disable check evaluation; MariaDB DDL is not atomic.
 - **Verification harness:** `phase1b_integrity_tests.sh` now requires an explicit disposable database (exact allowlist), `ALLOW_DESTRUCTIVE_FIXTURE_CLEANUP=YES` and empty fixture tables, prints server details, and uses lowercase UUIDv4 Domain B fixture ids; all earlier checks are kept. New scripts: `phase01c_d3_uuidv4_schema_tests.sh`, `phase01c_d3_refusal_tests.sh`.

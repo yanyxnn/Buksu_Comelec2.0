@@ -5,14 +5,14 @@
 **Note:** this file covers D3 only. The status of every other Phase 01C verification artifact is in `docs/PHASE01C_VERIFICATION_REGISTER.md`; scope and decisions are in `docs/PHASE01C_SCOPE_AND_DECISIONS.md`; the PROPOSED, UNVERIFIED privilege matrix is in `docs/PHASE01C_PRIVILEGE_MATRIX.md`. The D3 results below are unchanged.
 
 ## What the patch contains
-- Migration `database/migrations/2026_11_13_000100_normalize_domain_b_ballot_ids_to_uuidv4.php` (forward-only, empty-table-only, fail-closed, lock-first).
+- Migration `database/migrations/2026_11_13_000100_normalize_domain_b_ballot_ids_to_uuidv4.php` (empty-table-only, fail-closed, lock-first; rollback permitted only while all six Domain B tables are empty).
 - `database/verification/phase01c_d3_uuidv4_schema_tests.sh` (read-only schema checks).
 - `database/verification/phase01c_d3_refusal_tests.sh` (refusal, rollback-protection, lock, resume tests on a disposable database).
 - `database/verification/phase1b_integrity_tests.sh` (hardened safety gate; UUIDv4 fixtures; all original checks kept; D3 checks added).
 - Documentation updates (`DATABASE.md`, `TEST_PLAN.md`, `CHANGE_LOG.md`, this file).
 
 ## Decisions applied
-D3-D1 forward-only (historical migrations untouched); D3-D2 fail-closed on any record in the six tables; D3-D3 database-level lowercase-UUIDv4 CHECKs (enforcement **confirmed on MariaDB 10.4.32**, see below); D3-D4 exact database allowlist and destructive-cleanup confirmation; D3-D5 documentation claims only from captured evidence; D3-D7 one self-contained patch.
+D3-D1 historical migrations remain untouched, and rollback to the prior schema is permitted only while all six Domain B tables are empty; D3-D2 fail-closed on any record in the six tables; D3-D3 database-level lowercase-UUIDv4 CHECKs (enforcement **confirmed on MariaDB 10.4.32**, see below); D3-D4 exact database allowlist and destructive-cleanup confirmation; D3-D5 documentation claims only from captured evidence; D3-D7 one self-contained patch.
 
 ## Evidence status
 The D3 v2 patch was applied locally and the required MariaDB 10.4.32 gate was run. The figures below are the captured results supplied by the project owner.
