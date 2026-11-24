@@ -42,7 +42,7 @@ Two series are kept apart. **D3-D1 to D3-D8** are the decisions for the D3 Domai
 
 | ID | Decision | State |
 |---|---|---|
-| D3-D1 | Forward-only migration; the six historical migrations are preserved. | Decided |
+| D3-D1 | Rollback to the prior schema is permitted only while all six Domain B tables are empty. Rollback is refused when records exist. The six historical migrations remain unchanged. | Decided |
 | D3-D2 | Empty-table-only, fail-closed: the migration changes nothing unless all six Domain B tables are empty. | Decided |
 | D3-D3 | Database-level lowercase UUIDv4 `CHECK` constraints on the four primary keys, provided MariaDB 10.4.32 verification confirms enforcement. | Decided; enforcement confirmed on 10.4.32 |
 | D3-D4 | Destructive verification only against the exact allowlisted throwaway database `buksu_p1c_throwaway_test`, with explicit cleanup confirmation, identity verification and server details printed. | Decided; implemented |
