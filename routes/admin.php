@@ -18,4 +18,8 @@ Route::prefix('admin')->name('admin.')->middleware('admin')->group(function () {
     Volt::route('access-issues', 'admin.access-issues')->name('access-issues');
     Volt::route('data-center', 'admin.data-center')->name('data-center');
     Volt::route('students', 'admin.students')->name('students');
+    Volt::route('elections', 'admin.elections')->name('elections');
+    Volt::route('elections/new', 'admin.elections.new')->name('elections.new');
+    Volt::route('elections/{election}/scope', 'admin.elections.scope')->whereNumber('election')->name('elections.scope');
+    Volt::route('elections/{election}', 'admin.elections.show')->whereNumber('election')->name('elections.show');
 });
