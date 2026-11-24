@@ -20,7 +20,7 @@ Source: `docs/DATABASE.md` (Implementation status; Section 15), `docs/TEST_PLAN.
 
 | Objective | Status |
 |---|---|
-| D3: Domain B identifiers `CHAR(36)` with lowercase-UUIDv4 `CHECK` on four primary keys; forward-only, empty-table-only, fail-closed | **Completed; verified on MariaDB 10.4.32** (47/0, 89/0, 8/0) |
+| D3: Domain B identifiers `CHAR(36)` with lowercase-UUIDv4 `CHECK` on four primary keys; empty-table-only, fail-closed; rollback is permitted only while all six Domain B tables are empty | **Completed; verified on MariaDB 10.4.32** (47/0, 89/0, 8/0) |
 | D3 verification-harness hardening (allowlist, `db:wipe` guard, fixture cleanup, optional gate-server requirement) | **Completed; verified** |
 | D3 documentation with limitations | **Completed** |
 | Phase 01B regression gate remains runnable | **Completed** (A1 in the register) |
