@@ -1,4 +1,4 @@
-# CHANGE LOG
+z# CHANGE LOG
 
 ## 2026-09-26 — Architecture Baseline Planning
 - Established reusable configurable election-engine objective.
@@ -157,3 +157,18 @@ Every material architecture or election-rule change must record date, reason, pr
 * **Group names** are unique within an election, case-insensitively, enforced in the service under the election row lock (no database index, so no migration).
 * **Not changed:** contests, voter/candidate eligibility, candidates, ballots, results, import, authentication, the 04A draft flow and its tests (updated only where the workspace text, the election-page list and the audit signature changed).
 * **Not claimed:** what any dimension means or how it is matched (an eligibility-phase decision), versioned scope for exceptional changes, editing in `READY`. See `OPEN_DECISIONS.md` (Election scope configuration).
+
+## Unreleased — Phase 01C D3: Domain B identifier schema (verified on MariaDB 10.4.32; Phase 01C not complete)
+- **Migration (empty-table-only; fail-closed):** `2026_11_13_000100_normalize_domain_b_ballot_ids_to_uuidv4` converts `ballots.id`, `ballot_contest_responses.id`, `ballot_events.id`, `ballot_dispositions.id` and the five dependent columns from `CHAR(26)` to `CHAR(36) NOT NULL`, preserves the foreign keys, and adds lowercase-UUIDv4 `CHECK` constraints on the four primary keys. `voter_participations.id` and `submission_attempts.id` remain ULIDs. The six historical `create_ballot*` migrations are unchanged.
+- **Fail-closed:** runs only when all six Domain B tables are empty; otherwise it stops, reports each non-empty table with its row count, and changes nothing. `down()` refuses while any of the six tables holds rows. A named advisory lock is taken first and released in `finally`.
+- **Scope limits:** shape only (no identifier generation exists); the CHECK is not an unconditional security boundary because a session can disable check evaluation; MariaDB DDL is not atomic.
+- **Verification harness:** `phase1b_integrity_tests.sh` now requires an explicit disposable database (exact allowlist), `ALLOW_DESTRUCTIVE_FIXTURE_CLEANUP=YES` and empty fixture tables, prints server details, and uses lowercase UUIDv4 Domain B fixture ids; all earlier checks are kept. New scripts: `phase01c_d3_uuidv4_schema_tests.sh`, `phase01c_d3_refusal_tests.sh`.
+- **Status:** the required MariaDB 10.4.32 gate passed (refusal test 47/0, Phase 01B harness 89/0, schema test 8/0, all exit code 0; full SQLite Pest suite 494 passed, 1 skipped). Results are recorded in `docs/PHASE01C_PATCH_STATUS.md`. Not done: ballot writer and runtime UUIDv4 generation. **Phase 01C is not complete.**
+
+## Unreleased — Phase 01C verification-artifact reconciliation (documentation only; Phase 01C not complete)
+- **Added:** `docs/PHASE01C_VERIFICATION_REGISTER.md` (recovered / verified / unverified / not-found artifact register and search record), `docs/PHASE01C_SCOPE_AND_DECISIONS.md` (scope, objective ledger, decision register distinguishing D3-D1 to D3-D8 from D-1 to D-5), `docs/PHASE01C_PRIVILEGE_MATRIX.md` (PROPOSED / UNVERIFIED Domain A / Domain B privilege matrix with placeholder principals FP1 to FP6; the reconciliation-verifier (FP4) and backup (FP6) cross-domain risks are recorded as high-risk and unresolved, with no mitigation selected).
+- **Corrected:** `docs/DATABASE.md` Phase 01C status no longer presents earlier pass counts, concurrency cases, database-role checks, seeded-corruption reconciliation or a MariaDB 10.11.14 run as verified; they are recorded as unsupported historical claims, not found in searched locations (further recovery remains possible). The Section 3 heading no longer labels election configuration as "Domain B", and a terminology note states that Domain A / Domain B denote only the Section 7 secrecy boundary. `docs/TEST_PLAN.md` and `docs/PHASE01C_PATCH_STATUS.md` cross-reference the register.
+- **Decisions recorded:** D3-D6 (migration timestamp `2026_11_13_000100`, sorted after the pending Phase 04 migration `2026_11_12_170707`; file-name check only, Phase 04 migration contents not reviewed) and D3-D8 (no repository-tracked checksum manifest found; external or locally stored manifests unverified). D-1 to D-4 deferred; D-5 required.
+- **Unchanged:** all D3 results and limitations (47/0, 89/0, 8/0 on MariaDB 10.4.32; SQLite Pest 494 passed, 1 skipped).
+- **Not changed:** application code, migrations, tests, verification scripts, Phase 04.
+- **Not claimed:** no new verification of any kind; no database account, role or grant is created or approved; the privilege matrix is a proposal; the ballot writer and runtime UUIDv4 generation remain later application work and whether they gate sign-off is open. **Phase 01C is not complete.**
