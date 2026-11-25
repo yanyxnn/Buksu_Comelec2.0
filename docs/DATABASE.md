@@ -285,6 +285,8 @@ Important behavior:
 
 \- Explicit abstention is a separate response.
 
+Phase 04C: \`contests\` and \`contest_rules\` are written only by \`ElectionContestService\` while the election is an editable draft. A contest is bound to the election's current configuration version (\`election_config_version_id\`) and may reference only a representation group of the same election (application check plus the composite foreign key \`contests_rg_same_election_fk\`). Each contest has exactly one \`contest_rules\` row; because \`contest_rules.contest_id\` is RESTRICT, deleting a contest removes its rule row first, inside the same transaction. \`seat_count\` and \`selection_limit\` are stored as entered (the service bounds each to 1-100 as a technical sanity limit; no relation between them is enforced). \`contests.scope\` is not written.
+
 **### \`contest_eligibility_rules\`**
 
 Rule definition for which eligible voters may participate in the contest.

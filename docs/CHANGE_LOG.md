@@ -1,4 +1,4 @@
-z# CHANGE LOG
+# CHANGE LOG
 
 ## 2026-09-26 — Architecture Baseline Planning
 - Established reusable configurable election-engine objective.
@@ -157,6 +157,29 @@ Every material architecture or election-rule change must record date, reason, pr
 * **Group names** are unique within an election, case-insensitively, enforced in the service under the election row lock (no database index, so no migration).
 * **Not changed:** contests, voter/candidate eligibility, candidates, ballots, results, import, authentication, the 04A draft flow and its tests (updated only where the workspace text, the election-page list and the audit signature changed).
 * **Not claimed:** what any dimension means or how it is matched (an eligibility-phase decision), versioned scope for exceptional changes, editing in `READY`. See `OPEN_DECISIONS.md` (Election scope configuration).
+
+## Phase 04C: Contest configuration (pending review)
+* **Added:** `/admin/elections/{election}/contests` - an administrator manages an election's contests (name, position label, optional representation group of the SAME election) and each contest's basic voting rule (seat count, maximum selections per voter, abstention allowed, voting method `SINGLE_CHOICE` / `MULTI_CHOICE`). The election workspace shows the contest count and a Configure contests / View contests link.
+* **No schema change, no migration, no dependency.** The existing `contests` and `contest_rules` tables and their foreign keys are used as they are. `contests.scope` is not written, and the untracked local jurisdiction migration is not part of this phase.
+* **Service and authorization:** `ElectionContestService` is the single write path (create/update/delete in one transaction, audit inside it); `ElectionPolicy::viewContests` / `manageContests`; `Election::allowsContestEditing` shares one draft-editability rule with scope (DRAFT only, nothing locked, current version DRAFT with no frozen JSON). Lock order: election, current configuration version, contest. New contests are bound to the locked current configuration version.
+* **Audit:** `election.contest_created`, `election.contest_updated`, `election.contest_deleted`, each with `audit_logs.election_id` set; metadata holds ids and the seat count only, never names or labels.
+* **Models:** `Contest`, `ContestRule`; relations `Election::contests()` and `RepresentationGroup::contests()`.
+* **Tests:** `tests/Feature/Election/ElectionContestTest.php`; the route allow-list and the election-page scans in existing tests include the new route and page.
+* **Not claimed / not implemented:** eligibility rules (`contest_eligibility_rules` is neither read for meaning nor written), candidates, parties, ballots, lifecycle transitions, snapshotting, results, any relation between seats and the selection limit, true multi-connection concurrency. See `OPEN_DECISIONS.md` (Contest configuration).
+
+## Election configuration usability (pending review)
+* **Scope page:** reworded around representation groups, categories and values. Administrators enter a readable category name; the internal lowercase underscore key is generated automatically and shown back as a readable name in the group list and when editing. Stored keys are preserved (a key a label cannot reproduce is kept unless renamed), duplicate names are refused after normalization, and step-by-step help explains group name, category name and values and that groups organize contests without determining voter or candidate eligibility.
+* **Contests page:** the form is split into "Contest details" and "Voting settings", with plain-language labels and a help line under every field, including the difference between available seats and the maximum candidates a voter may select, clearer single/multiple choice option descriptions, and a note that a representation group does not determine eligibility.
+* **Tests and docs:** `ElectionScopeTest` and `ElectionContestTest` updated and extended; `ELECTION_CONFIGURATION.md` updated.
+* **No schema, migration, dependency, service, authorization, audit, transaction or voting-policy change.** No institutional category, value, contest, position or seat count was added.
+
+## Election configuration redesign (pending review)
+* **Election workspace:** rebuilt as an overview dashboard: header with state badge, type and editable/read-only indicator, shared navigation, step cards for representation groups and contests with saved counts and Configure/View actions, saved details, configuration status and guidance that eligibility, candidates, ballot rules, scheduling and results are separate stages. No readiness score or new operation was added.
+* **Representation groups:** values are added one at a time and shown as editable, removable tags; saved groups are cards with categories, value tags and the number of contests using the group; delete uses a confirmation dialog. The stored `scope_definition_json` contract, the automatic key generation and the `storedKeys` round-trip are unchanged.
+* **Contests:** guided flow (details, voting settings, review before saving) with a read-only review that saves nothing; saved contests are cards; delete uses a confirmation dialog.
+* **Feedback:** saving state, server-confirmed success toasts with an `aria-live` status region and reduced-motion support, editing and unsaved-changes indicators with a leave-page warning, and plain-language failure messages that keep the typed input.
+* **Tests and docs:** `ElectionScopeTest` and `ElectionContestTest` updated and extended (including workspace tests); `ELECTION_CONFIGURATION.md` updated.
+* **No schema, migration, dependency, service, policy, audit, transaction, locking or voting-policy change.** No institutional category, value, contest, position, seat count or eligibility rule was added.
 
 ## Unreleased — Phase 01C D3: Domain B identifier schema (verified on MariaDB 10.4.32; Phase 01C not complete)
 - **Migration (empty-table-only; fail-closed):** `2026_11_13_000100_normalize_domain_b_ballot_ids_to_uuidv4` converts `ballots.id`, `ballot_contest_responses.id`, `ballot_events.id`, `ballot_dispositions.id` and the five dependent columns from `CHAR(26)` to `CHAR(36) NOT NULL`, preserves the foreign keys, and adds lowercase-UUIDv4 `CHECK` constraints on the four primary keys. `voter_participations.id` and `submission_attempts.id` remain ULIDs. The six historical `create_ballot*` migrations are unchanged.

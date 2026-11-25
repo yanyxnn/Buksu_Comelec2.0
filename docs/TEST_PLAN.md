@@ -189,3 +189,18 @@ All data is synthetic; dimension keys and values in tests are arbitrary strings.
 - Workspace: link and summary follow the policy.
 - Scope of change: writes only through the service; no institutional values in the new code; no migration.
 - **Run on MariaDB, not only SQLite:** SQLite ignores row locks, so the test "every scope write locks the election, its version and the group row" is skipped there and runs only on MySQL/MariaDB. Run the whole suite once against the target MariaDB version. True two-connection concurrency (create versus a state change, delete versus a contest insert) is not covered by the automated suite and needs a manual or dedicated MariaDB check.
+
+## Phase 04C tests (contest configuration)
+`tests/Feature/Election/ElectionContestTest.php`, synthetic data only.
+- Access and policy: guest, student, administrator, unknown or non-numeric election ids, broken roster, Livewire component refusal, re-check on every action.
+- DRAFT-only editability: every reason editing is refused (READY, later state, locked version, version not DRAFT, frozen JSON, no current version, missing/foreign/non-current version row), existing contests protected after the state changes, one shared decision with scope.
+- Service: create/update/delete transactional, bound to the current version, audited with `audit_logs.election_id`, ids and seat count only in metadata, rollback (including the rule row) when auditing fails, no configuration-version change.
+- Voting rules: both voting methods persist, one rule row per contest, no enforced relation between seats and selection limit.
+- Validation: names/labels (length, control/format characters, invalid UTF-8, Unicode spaces), counts (1-100, integers only), abstain flag (boolean only), voting method (exact enum), group id type; boundary values accepted.
+- Representation groups: own-election group or none; another election's or a missing group refused; the composite foreign keys still refuse bad rows at the database.
+- Ownership and forged ids: cross-election and other-version contests are not found; locked Livewire properties; forged contest/group ids reveal and change nothing.
+- Deletion: refused with dependent records (application check and the foreign-key backstop, rule row restored); double delete and double submit.
+- Page: empty state, plain-language validation, read-only rendering outside an editable draft, state change while the page is open, no personal data, valid icons, lock timeout/deadlock message with other database errors not hidden.
+- Workspace: contest count (current version only) and the Configure/View link follow the policy.
+- Scope of change: writes only through the service; no institutional values; no jurisdiction fields in the contest code. That Phase 04C adds no migration or dependency is checked by reviewing the patch's changed-file set, not by a test, because a test cannot tell Phase 04C's files from other migrations already present in a local checkout.
+- **Run on MariaDB, not only SQLite:** the test "on MySQL/MariaDB every contest write locks the election, its version and the contest row in that order" is skipped on SQLite and runs only on MySQL/MariaDB. True two-connection concurrency is not covered by the automated suite.
